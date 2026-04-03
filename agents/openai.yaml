@@ -1,0 +1,4 @@
+interface:
+  display_name: "分身.skill"
+  short_description: "Build a private digital double from chat and self-description."
+  default_prompt: "Use $create-double to interview me, structure my profile, and generate a private digital double skill."

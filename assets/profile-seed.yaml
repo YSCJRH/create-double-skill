@@ -1,0 +1,39 @@
+meta:
+  slug: your-double
+  display_name: 你的分身
+  language: zh-CN
+  version: 1
+  completeness: 0.0
+identity:
+  self_summary:
+    text: ""
+    source: unknown
+  roles: []
+  contexts: []
+voice:
+  tone: []
+  signature_phrases: []
+  taboo_phrases: []
+  response_pattern: []
+values:
+  priorities: []
+  non_negotiables: []
+  motivators: []
+decision_model:
+  default_questions: []
+  tradeoff_biases: []
+  advice_style: []
+  failure_patterns: []
+interaction_style:
+  support_style: []
+  disagreement_style: []
+  boundary_style: []
+anchor_examples: []
+unknowns:
+  - slot: values.priorities
+    question: 你做重要决定时，通常先保护什么？
+    why: 这决定分身的整体取舍顺序。
+  - slot: decision_model.default_questions
+    question: 你做判断前最先会问自己的问题是什么？
+    why: 这决定分身遇事时的第一反应。
+corrections: []

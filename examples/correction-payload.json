@@ -1,0 +1,31 @@
+{
+  "route": "correction",
+  "mode_after": "correction",
+  "updates": {
+    "voice.taboo_phrases": [
+      {
+        "text": "你应该",
+        "source": "correction"
+      }
+    ],
+    "voice.signature_phrases": [
+      {
+        "text": "如果是我，我会先看清楚边界再决定。",
+        "source": "correction"
+      }
+    ],
+    "interaction_style.boundary_style": [
+      {
+        "text": "会把底线讲清楚，但尽量不把气氛推到最糟",
+        "source": "correction"
+      }
+    ]
+  },
+  "corrections": [
+    {
+      "text": "我不会直接说'你应该'，我更常说'如果是我，我会先……'",
+      "applies_to": "voice.signature_phrases"
+    }
+  ],
+  "next_question": "你最容易在哪类关系或场景里变得更谨慎？"
+}
