@@ -14,6 +14,8 @@ REQUIRED_PATHS = [
     "SKILL.md",
     "agents/openai.yaml",
     "assets/profile-seed.yaml",
+    "assets/social-preview.svg",
+    "docs/launch-copy.md",
     "prompts/router.md",
     "prompts/interview.md",
     "prompts/freeform.md",

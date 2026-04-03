@@ -1,5 +1,7 @@
 # create-double-skill
 
+![create-double-skill social preview](assets/social-preview.svg)
+
 Build a private digital double from guided interviews, freeform self-description, and explicit corrections.
 
 分身.skill 是一个本地私有、中文优先的数字分身构建器。  
@@ -72,6 +74,17 @@ Generated outputs:
 - `doubles/my-double/profile.md`
 - `doubles/my-double/SKILL.md`
 
+## Built with Codex
+
+这个项目是在 Codex 协作式工作流里构建出来的：skill 结构、builder 脚本、示例 payload、README、验证脚本和 CI 都是在本地迭代完成的。  
+虽然仓库本身不强依赖 Codex 才能运行，但如果你也在 Codex 里使用它，通常会更容易获得完整体验，因为这个项目天然围绕以下工作方式设计：
+
+- 逐轮对话式采集与修正
+- 基于 `SKILL.md`、`prompts/`、`references/` 的 skill 调用习惯
+- 把自由描述整理为结构化 patch，再持续回写 `profile.yaml`
+
+换句话说，它不是只能在 Codex 里工作，但在 Codex 里通常会更顺手，也更接近它最初被设计出来的使用场景。
+
 ## Project identity
 
 - GitHub repository name: `create-double-skill`
@@ -134,6 +147,7 @@ Use `render` to generate the human-readable `profile.md` and the runtime `SKILL.
 - [examples/correction-payload.json](examples/correction-payload.json)
 - [examples/README.md](examples/README.md)
 - [docs/launch-copy.md](docs/launch-copy.md)
+- [assets/social-preview.svg](assets/social-preview.svg)
 
 ## Validation
 
@@ -178,4 +192,3 @@ GitHub Actions runs the same checks automatically.
 - 更自然的自由描述抽取与修正合并
 - 更完整的运行时分身评测
 - 可选的图形界面和 social preview 视觉资源
-- 公开发布前补上明确的开源许可证
