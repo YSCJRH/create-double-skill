@@ -181,7 +181,8 @@ create-double-skill/
 ├─ docs/
 │  ├─ benchmark-review.md
 │  ├─ launch-copy.md
-│  └─ pre-release-checklist.md
+│  ├─ pre-release-checklist.md
+│  └─ release-v0.1.0.md
 ├─ prompts/
 ├─ references/
 ├─ scripts/
