@@ -4,7 +4,7 @@
 
 ## Recommended About
 
-Build a private digital double from guided interviews and freeform self-description.
+Build a private digital double and an editable model of how you think, choose, and present yourself.
 
 ## About Variants
 
@@ -23,6 +23,10 @@ A high-signal, correction-friendly way to turn self-description into a private d
 ### Variant D
 
 Build a private digital double and an editable model of how you think, choose, and present yourself.
+
+### Variant E
+
+Turn "Who am I?" into an editable, local-first digital double workflow.
 
 ## Recommended Topics
 
@@ -63,7 +67,11 @@ Build a private digital double and an editable model of how you think, choose, a
 
 - Main title: `create-double-skill`
 - Supporting line: `Build a private digital double`
-- Small line: `Capture how you speak, decide, and draw boundaries.`
+- Small line: `An editable model of how you think, choose, and present yourself.`
+
+## Recommended Release Hook
+
+- `Not a life-log. Not a memory simulator. A local-first way to build and revise different versions of yourself.`
 
 ## Tone Guidance
 

@@ -10,6 +10,10 @@
 
 `create-double-skill` 是一个本地优先、可修正、可审计的数字分身起点，用来逐步沉淀一个人的表达风格、价值观、决策方式，以及不同版本的自我模型。
 
+## 首屏开场句
+
+`Not a life-log. Not a memory simulator. A local-first way to build and revise different versions of yourself.`
+
 ## 发布说明
 
 `create-double-skill` 的第一版聚焦一件事：  
