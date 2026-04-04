@@ -233,6 +233,7 @@ create-double-skill/
 
 - [docs/pre-release-checklist.md](docs/pre-release-checklist.md)
 - [docs/benchmark-review.md](docs/benchmark-review.md)
+- [docs/release-v0.1.0.md](docs/release-v0.1.0.md)
 - [docs/launch-copy.md](docs/launch-copy.md)
 
 ## 校验

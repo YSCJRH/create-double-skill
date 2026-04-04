@@ -71,7 +71,9 @@ Smoke test 期望：
 - [x] 当前默认分支是 `main`
 - [ ] 最新提交的 GitHub Actions 结果为绿色
 - [ ] README 首屏、About、topics、social preview 的用词已对齐
-- [ ] 准备公开时，决定是否添加 issue template / discussion / 首个 release
+- [x] 本地已准备 issue templates
+- [x] 本地已准备 `v0.1.0` 发布草稿
+- [ ] 准备公开时，决定是否启用 discussion 或正式创建首个 release
 
 说明：
 

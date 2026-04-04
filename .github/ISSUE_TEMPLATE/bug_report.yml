@@ -1,0 +1,63 @@
+name: Bug report
+description: Report a concrete bug or regression in create-double-skill.
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请尽量提供可复现信息，这能明显缩短定位时间。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题概述
+      description: 用 1-3 句话说明你遇到了什么问题。
+      placeholder: 例如：`render` 成功返回，但 `doubles/<slug>/SKILL.md` 没有生成。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 按顺序写出最短复现路径。
+      placeholder: |
+        1. 运行 `python scripts/double_builder.py init --slug demo --display-name "演示分身"`
+        2. 运行 `python scripts/double_builder.py apply-turn --slug demo --payload-file ...`
+        3. 运行 `python scripts/double_builder.py render --slug demo`
+        4. 观察到 ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+      description: 你原本以为会发生什么？
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 实际发生了什么？如果有报错，请贴完整信息。
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境信息
+      description: 尽量提供系统、Python 版本、运行方式和是否在 Codex/Claude Code 中使用。
+      placeholder: |
+        - OS:
+        - Python:
+        - Command:
+        - AI assistant (optional):
+    validations:
+      required: false
+  - type: textarea
+    id: extras
+    attributes:
+      label: 补充信息
+      description: 可以补充截图、最小 payload、或你已经尝试过的排查方式。
+    validations:
+      required: false

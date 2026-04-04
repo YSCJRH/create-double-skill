@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Read the README first
+    url: https://github.com/YSCJRH/create-double-skill#readme
+    about: 先看 README 里的快速路径、常见问题和安装方式。
+  - name: Check the pre-release checklist
+    url: https://github.com/YSCJRH/create-double-skill/blob/main/docs/pre-release-checklist.md
+    about: 如果你正在准备公开发布或复核仓库门面，先看这份清单。

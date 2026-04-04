@@ -1,0 +1,58 @@
+name: Feature request
+description: Suggest an improvement for create-double-skill.
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        欢迎提出改进建议。为了保持项目的边界，请尽量说明它为什么值得做，以及它是否会影响隐私、复杂度或可信度。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么问题
+      description: 先说痛点，再说功能。
+      placeholder: 例如：第一次使用者不知道该先准备哪些信息，导致容易卡在开始阶段。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你的建议
+      description: 请尽量写成一个具体改动，而不是宽泛愿景。
+      placeholder: 例如：增加一个 `docs/first-run.md`，提供 3 条最短路径和常见错误。
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 你认为它属于哪一类
+      options:
+        - README / 文档
+        - CLI / builder
+        - prompts / routing
+        - 生成结果 / 渲染
+        - 测试 / CI
+        - 其他
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: 这项建议的主要代价
+      options:
+        - 几乎没有额外代价
+        - 会增加文档或维护成本
+        - 会增加功能复杂度
+        - 可能影响隐私边界
+        - 不确定
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 你考虑过的替代方案
+      description: 如果你已经想过更轻的做法，可以写在这里。
+    validations:
+      required: false
