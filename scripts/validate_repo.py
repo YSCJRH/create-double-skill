@@ -10,6 +10,7 @@ import yaml
 
 
 REQUIRED_PATHS = [
+    "LICENSE",
     "README.md",
     "SKILL.md",
     "agents/openai.yaml",

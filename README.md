@@ -73,6 +73,31 @@ python scripts/double_builder.py render --slug my-double
 - `doubles/my-double/profile.md`
 - `doubles/my-double/SKILL.md`
 
+## 典型使用场景
+
+- 想把自己的表达风格和判断方式沉淀成一个可迭代的本地分身
+- 想在做决定时，得到“更像自己会怎么想”的第二视角
+- 想先用访谈和自由描述做一个轻量但可信的数字分身，而不是直接做全量人生资料库
+- 想持续修正一个分身，而不是一次性生成后就无法再改
+
+## 第一次对话示例
+
+下面是一种很典型的起步方式：
+
+```text
+用户：我想做一个更像“会怎么判断事情的我”，而不只是会模仿语气的分身。
+
+create-double：继续提问。你做重要决定时，通常最先保护什么？
+
+用户：我通常先保护长期可持续，其次是关系里的稳定感。
+
+create-double：收到。这说明你不是单纯追求短期效率的人。那如果必须在“快速推进”和“减少后患”之间选一个，你通常更偏哪边？
+
+用户：我更偏减少后患。慢一点可以接受，但我不想让错误预期扩散。
+```
+
+这种对话会逐步沉淀进 `values.priorities`、`decision_model.tradeoff_biases` 和 `anchor_examples`，最后渲染成一个更像“你会怎么判断”的分身，而不只是一个会模仿措辞的角色。
+
 ## 让 Codex 或其他 AI 编程助手帮你安装
 
 如果你不想手动逐步配置环境，可以把整个仓库目录直接交给 Codex 或其他 AI 编程助手处理。  
@@ -183,6 +208,10 @@ python -m unittest tests/test_double_builder.py -v
 ```
 
 GitHub Actions 也会自动运行相同检查。
+
+## 开源许可证
+
+本项目采用 [MIT License](LICENSE)。
 
 ## 隐私与边界
 
