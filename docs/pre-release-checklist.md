@@ -73,6 +73,10 @@ Smoke test 期望：
 - [ ] README 首屏、About、topics、social preview 的用词已对齐
 - [ ] 准备公开时，决定是否添加 issue template / discussion / 首个 release
 
+说明：
+
+- 如果当前自动化环境无法读取私有仓库的 workflow 状态，请直接在 GitHub `Actions` 页面手动确认最近一次运行是否为绿色
+
 目前最推荐的元信息：
 
 - About: `Build a private digital double from guided interviews and freeform self-description.`
