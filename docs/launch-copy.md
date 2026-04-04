@@ -2,6 +2,8 @@
 
 为 `create-double-skill` 准备的 GitHub 展示文案。
 
+如果你只想要一份最终可复制粘贴版本，优先看 [github-publication-kit.md](github-publication-kit.md)。
+
 ## Recommended About
 
 Build a private digital double and an editable model of how you think, choose, and present yourself.

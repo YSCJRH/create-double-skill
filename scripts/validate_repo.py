@@ -20,6 +20,7 @@ REQUIRED_PATHS = [
     ".github/ISSUE_TEMPLATE/config.yml",
     ".github/ISSUE_TEMPLATE/feature_request.yml",
     "docs/benchmark-review.md",
+    "docs/github-publication-kit.md",
     "docs/launch-copy.md",
     "docs/pre-release-checklist.md",
     "docs/release-v0.1.0.md",

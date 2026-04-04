@@ -279,6 +279,7 @@ create-double-skill/
 
 ## 发布与对标参考
 
+- [docs/github-publication-kit.md](docs/github-publication-kit.md)
 - [docs/pre-release-checklist.md](docs/pre-release-checklist.md)
 - [docs/benchmark-review.md](docs/benchmark-review.md)
 - [docs/release-v0.1.0.md](docs/release-v0.1.0.md)
