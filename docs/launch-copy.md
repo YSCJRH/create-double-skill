@@ -20,6 +20,10 @@ Local-first digital double builder for capturing voice, values, and decision sty
 
 A high-signal, correction-friendly way to turn self-description into a private digital double.
 
+### Variant D
+
+Build a private digital double and an editable model of how you think, choose, and present yourself.
+
 ## Recommended Topics
 
 - `digital-double`
@@ -49,6 +53,12 @@ A high-signal, correction-friendly way to turn self-description into a private d
 - Subtitle: `A high-signal digital double`
 - Footer: `Private. editable. uncertainty-aware.`
 
+### Option D
+
+- Title: `create-double-skill`
+- Subtitle: `Not just a clone of you`
+- Footer: `An editable model of your different selves`
+
 ## Recommended Social Preview Direction
 
 - Main title: `create-double-skill`
@@ -59,5 +69,6 @@ A high-signal, correction-friendly way to turn self-description into a private d
 
 - Avoid sounding like a generic AI companion app.
 - Emphasize `local-first`, `high-signal`, and `uncertainty-aware`.
-- Prefer words like `voice`, `values`, `decision style`, and `corrections`.
+- Prefer words like `voice`, `values`, `decision style`, `corrections`, and `editable selves`.
 - Avoid claims that imply memory simulation, surveillance-style data capture, or full personality cloning.
+- The philosophical framing should deepen the story, not overpromise psychological truth or diagnosis.
