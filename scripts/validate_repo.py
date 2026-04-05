@@ -34,6 +34,9 @@ REQUIRED_PATHS = [
     "scripts/double_builder.py",
     "tests/test_double_builder.py",
     "examples/README.md",
+    "examples/start-transcript.md",
+    "examples/generated-artifacts.md",
+    "examples/correction-before-after.md",
     "examples/initial-freeform-payload.json",
     "examples/correction-payload.json",
 ]

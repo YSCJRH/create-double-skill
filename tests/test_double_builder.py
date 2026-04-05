@@ -25,7 +25,7 @@ class DoubleBuilderTests(unittest.TestCase):
         self.assertEqual(routed["route"], "switch_mode")
         self.assertEqual(routed["mode_after"], "interview")
 
-        correction = double_builder.classify_turn("我不会这样说，我更在意边界。", current_mode="interview")
+        correction = double_builder.classify_turn("我不会这么说，我更在意边界。", current_mode="interview")
         self.assertEqual(correction["route"], "correction")
         self.assertEqual(correction["mode_after"], "correction")
 
@@ -51,7 +51,7 @@ class DoubleBuilderTests(unittest.TestCase):
                 {
                     "situation": "团队想快速上线一个判断还不稳定的功能",
                     "choice": "先缩小范围",
-                    "reason": "不要让错误预期扩大",
+                    "reason": "不要让错误预期放大",
                     "source": "direct",
                 }
             ],
@@ -110,6 +110,78 @@ class DoubleBuilderTests(unittest.TestCase):
         history_path = Path(second_render["snapshot"])
         self.assertTrue((history_path / "profile.yaml").exists())
         self.assertTrue((history_path / "SKILL.md").exists())
+
+    def test_start_creates_first_artifact_without_payload_file(self):
+        prompts = iter(
+            [
+                "",
+                "长期可持续、关系里的稳定感",
+                "我会先问这件事三个月后还重要吗",
+                "我会把底线讲清楚，但尽量不把气氛推到最糟",
+                "我更在意边界清晰",
+            ]
+        )
+        output_lines: list[str] = []
+
+        result = double_builder.start_double(
+            self.root,
+            "starter-double",
+            "起步分身",
+            ask=lambda prompt: next(prompts),
+            writer=output_lines.append,
+        )
+
+        self.assertTrue(result["correction_applied"])
+        self.assertTrue(Path(result["render"]["profile_md"]).exists())
+        self.assertTrue(Path(result["render"]["skill"]).exists())
+        self.assertIn("继续补充：python scripts/double_builder.py correct --slug starter-double", output_lines[-1])
+
+        profile = double_builder.load_yaml(double_builder.profile_path(self.root, "starter-double"))
+        priorities = [item["text"] for item in profile["values"]["priorities"]]
+        self.assertIn("长期可持续", priorities)
+        self.assertIn("关系里的稳定感", priorities)
+        self.assertIn("边界清晰", priorities)
+        self.assertGreaterEqual(len(profile["corrections"]), 1)
+
+    def test_correct_understands_natural_language_repair(self):
+        double_builder.apply_turn(
+            self.root,
+            "my-double",
+            {
+                "route": "answer",
+                "mode_after": "interview",
+                "updates": {
+                    "voice.signature_phrases": [{"text": "你应该", "source": "inferred"}],
+                    "interaction_style.boundary_style": [{"text": "先忍着", "source": "inferred"}],
+                },
+            },
+        )
+        double_builder.render_outputs(self.root, "my-double")
+
+        double_builder.correct_double(
+            self.root,
+            "my-double",
+            text="我不会直接说'你应该'，我更常说'如果是我，我会先把边界讲清楚'。",
+            writer=lambda _text: None,
+        )
+
+        profile = double_builder.load_yaml(double_builder.profile_path(self.root, "my-double"))
+        taboo_phrases = [item["text"] for item in profile["voice"]["taboo_phrases"]]
+        signature_phrases = [item["text"] for item in profile["voice"]["signature_phrases"]]
+        self.assertIn("你应该", taboo_phrases)
+        self.assertIn("如果是我，我会先把边界讲清楚", signature_phrases)
+        self.assertGreaterEqual(len(profile["corrections"]), 1)
+
+    def test_doctor_reports_repo_health(self):
+        report = double_builder.doctor_report(MODULE_PATH.parents[1])
+        checks = {item["name"]: item for item in report["checks"]}
+
+        self.assertIn("Python", checks)
+        self.assertIn("PyYAML", checks)
+        self.assertIn("Repo validation", checks)
+        self.assertTrue(checks["Python"]["ok"])
+        self.assertTrue(checks["PyYAML"]["ok"])
+        self.assertTrue(checks["Repo validation"]["ok"])
 
 
 if __name__ == "__main__":

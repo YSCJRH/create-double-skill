@@ -6,7 +6,7 @@
 ## About
 
 ```text
-Build a private digital double and an editable model of how you think, choose, and present yourself.
+Build a private digital double that captures how you judge, set boundaries, and give advice.
 ```
 
 ## Topics
@@ -29,11 +29,11 @@ v0.1.0 - A local-first starting point for building a private digital double
 ## Release Body
 
 ```md
-Not a life-log. Not a memory simulator. A local-first way to build and revise different versions of yourself.
+Not a life-log. Not a memory simulator. A local-first way to build and correct a self-model.
 
-`create-double-skill` 的第一版聚焦一件事：
+`create-double-skill` 现在最想解决的一件事是：
 
-不用自动抓取大量隐私素材，也能通过引导式提问、自由自述和显式修正，构建一个更像“你会怎么判断”的数字分身。
+不用自动抓取大量隐私素材，也能在几分钟内生成一个更像“你会怎么判断”的数字分身。
 
 这不是人生资料库，不是记忆模拟器，也不承诺“人格复制”。
 它更像一个 `local-first` 的 starter repo：用结构化档案、可回写修正和可读产物，把“自我蒸馏”变成一个可迭代的工作流。
@@ -45,6 +45,9 @@ Not a life-log. Not a memory simulator. A local-first way to build and revise di
 
 ## This release includes
 
+- 3-minute first run：`start` 命令直接提问、写入、渲染和预览
+- 自然语言 correction：`correct` 命令支持“我不会这么说”“我更在意 X”
+- `doctor` 健康检查：依赖、仓库完整性、写权限、终端编码提示
 - 混合采集：访谈提问和自由描述可随时切换
 - 固定 schema：以 `profile.yaml` 作为唯一结构化真源
 - 产物生成：自动渲染 `profile.md` 和运行时 `SKILL.md`
@@ -71,9 +74,7 @@ Not a life-log. Not a memory simulator. A local-first way to build and revise di
 
 ```powershell
 python -m pip install -r requirements.txt
-python scripts/double_builder.py init --slug my-double --display-name "我的分身"
-python scripts/double_builder.py apply-turn --slug my-double --payload-file examples/initial-freeform-payload.json
-python scripts/double_builder.py render --slug my-double
+python scripts/double_builder.py start --slug my-double --display-name "我的分身"
 ```
 
 Built with Codex, but not limited to Codex.

@@ -29,6 +29,9 @@
 
 ## 本版包含
 
+- 3-minute first run：`start` 命令直接提问、写入、渲染和预览
+- 自然语言 correction：`correct` 命令支持“我不会这么说”“我更在意 X”
+- `doctor` 健康检查：依赖、仓库完整性、写权限、终端编码提示
 - 混合采集：访谈提问和自由描述可随时切换
 - 固定 schema：以 `profile.yaml` 作为唯一结构化真源
 - 产物生成：自动渲染 `profile.md` 和运行时 `SKILL.md`
@@ -53,9 +56,7 @@
 
 ```powershell
 python -m pip install -r requirements.txt
-python scripts/double_builder.py init --slug my-double --display-name "我的分身"
-python scripts/double_builder.py apply-turn --slug my-double --payload-file examples/initial-freeform-payload.json
-python scripts/double_builder.py render --slug my-double
+python scripts/double_builder.py start --slug my-double --display-name "我的分身"
 ```
 
 ## 公开发布前建议

@@ -4,14 +4,19 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import shutil
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
+try:
+    import yaml
+except ModuleNotFoundError:  # pragma: no cover - exercised through doctor in real environments
+    yaml = None
 
 VALID_ROUTES = {"answer", "freeform", "correction", "switch_mode", "finish"}
 VALID_MODES = {"interview", "freeform", "correction"}
@@ -37,10 +42,74 @@ LIST_CLAIM_FIELDS = {
 }
 ALLOWED_UPDATE_PATHS = SINGLE_CLAIM_FIELDS | LIST_CLAIM_FIELDS
 SOURCE_PRIORITY = {"unknown": 0, "inferred": 1, "direct": 2, "correction": 3}
+START_BANNER = "3 分钟内生成你的第一个 double，不需要写 JSON。"
+START_CHOICE_PROMPT = '按回车开始 3 个问题；输入 "我自己说" 改成一段自述；输入 "demo" 先看演示： '
+START_CORRECTION_PROMPT = '如果有一句不对，直接输入“我不会这么说...”或“我更在意...”，回车跳过： '
+GUIDED_START_QUESTIONS = [
+    {
+        "slot": "values.priorities",
+        "prompt": "1/3 你做重要决定时，通常先保护什么？\n> ",
+        "why": "这决定分身的整体取舍顺序。",
+    },
+    {
+        "slot": "decision_model.default_questions",
+        "prompt": "2/3 别人来找你要建议时，你通常会先问什么，或先看什么？\n> ",
+        "why": "这决定分身给建议时先抓什么。",
+    },
+    {
+        "slot": "interaction_style.boundary_style",
+        "prompt": "3/3 你不舒服时会怎么设边界？\n> ",
+        "why": "这会影响分身在压力和冲突下的表现。",
+    },
+]
+ONBOARDING_UNKNOWNS = [
+    {
+        "slot": "interaction_style.support_style",
+        "question": "别人低落或混乱时，你更像是安抚、追问，还是帮对方看清取舍？",
+        "why": "这会影响分身给建议时的陪伴方式。",
+    },
+    {
+        "slot": "voice.tone",
+        "question": "别人会怎么形容你的语气和说话节奏？",
+        "why": "这会影响分身听起来像不像你。",
+    },
+    {
+        "slot": "anchor_examples",
+        "question": "给我一个你最近做取舍的真实小例子：发生了什么、你怎么选、为什么？",
+        "why": "高信号案例会让分身更像你怎么判断。",
+    },
+]
+FREEFORM_HINT = (
+    "请用 3-6 句描述你自己，重点写你怎么判断、怎么给建议、怎么设边界。"
+)
+DEMO_SLUG = "demo-double"
 
 
 def now_iso() -> str:
     return datetime.now().astimezone().replace(microsecond=0).isoformat()
+
+
+def require_yaml(command_name: str = "this command") -> None:
+    if yaml is None:
+        raise RuntimeError(
+            f"PyYAML 未安装，无法运行 {command_name}。先执行 `python -m pip install -r requirements.txt`。"
+        )
+
+
+def ensure_utf8_output() -> None:
+    for stream_name in ("stdin", "stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except OSError:
+                pass
+
+
+def stdout_is_utf8() -> bool:
+    encoding = (getattr(sys.stdout, "encoding", None) or "").lower()
+    return "utf" in encoding
 
 
 def normalize_slug(value: str) -> str:
@@ -119,7 +188,7 @@ def blank_profile(slug: str, display_name: str, language: str = "zh-CN") -> dict
 
 
 def blank_session(profile: dict[str, Any]) -> dict[str, Any]:
-    next_question = profile["unknowns"][0]["question"] if profile["unknowns"] else ""
+    next_question = next_question_from_profile(profile)
     return {
         "mode": "interview",
         "last_route": "switch_mode",
@@ -129,11 +198,13 @@ def blank_session(profile: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
+    require_yaml(path.name)
     with path.open("r", encoding="utf-8") as handle:
         return yaml.safe_load(handle) or {}
 
 
 def write_yaml(path: Path, data: dict[str, Any]) -> None:
+    require_yaml(path.name)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as handle:
         yaml.safe_dump(
@@ -304,6 +375,240 @@ def set_update(profile: dict[str, Any], path: str, value: Any) -> None:
     profile[section][field] = merge_claim_lists(profile[section][field], incoming)
 
 
+def next_question_from_profile(profile: dict[str, Any]) -> str:
+    unknowns = profile.get("unknowns", [])
+    if unknowns:
+        return str(unknowns[0].get("question", "")).strip()
+    return ""
+
+
+def unique_nonempty(items: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        value = item.strip()
+        key = value.lower()
+        if not value or key in seen:
+            continue
+        seen.add(key)
+        result.append(value)
+    return result
+
+
+def claim_values(items: list[dict[str, str]]) -> list[str]:
+    return [item.get("text", "").strip() for item in items if item.get("text", "").strip()]
+
+
+def add_update_text(
+    updates: dict[str, Any],
+    path: str,
+    text: str,
+    *,
+    source: str = "direct",
+) -> None:
+    value = text.strip()
+    if not value:
+        return
+
+    if path in SINGLE_CLAIM_FIELDS:
+        current = updates.get(path)
+        if not current or SOURCE_PRIORITY[source] >= SOURCE_PRIORITY[current.get("source", "unknown")]:
+            updates[path] = {"text": value, "source": source}
+        return
+
+    existing = updates.setdefault(path, [])
+    if isinstance(existing, dict):
+        existing = [existing]
+        updates[path] = existing
+    if all(item.get("text", "").strip().lower() != value.lower() for item in existing):
+        existing.append({"text": value, "source": source})
+
+
+def split_short_list(text: str) -> list[str]:
+    parts = [part.strip(" ，,、；;。") for part in re.split(r"[、，,；;]", text) if part.strip(" ，,、；;。")]
+    short_parts = [part for part in parts if len(part) <= 18]
+    if len(short_parts) >= 2 and len(short_parts) == len(parts):
+        return unique_nonempty(short_parts)
+    return [text.strip()]
+
+
+def split_sentences(text: str) -> list[str]:
+    segments = re.split(r"[。！？!?\n]+", text)
+    return unique_nonempty([segment.strip(" ，,；;") for segment in segments if segment.strip(" ，,；;")])
+
+
+def extract_quoted_phrases(text: str) -> list[str]:
+    return unique_nonempty(re.findall(r"[\"'“”‘’](.*?)[\"'“”‘’]", text))
+
+
+def first_clause(text: str) -> str:
+    return re.split(r"[，,；;。！？!?\n]", text, maxsplit=1)[0].strip(" ：:\"'“”‘’")
+
+
+def text_after_marker(text: str, markers: list[str]) -> str:
+    for marker in markers:
+        if marker in text:
+            return text.split(marker, 1)[1].strip()
+    return ""
+
+
+def filter_unknowns(unknowns: list[dict[str, str]], filled_slots: set[str]) -> list[dict[str, str]]:
+    filtered: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in unknowns:
+        normalized = normalize_unknown(item)
+        slot = normalized["slot"]
+        if slot in filled_slots or slot in seen:
+            continue
+        seen.add(slot)
+        filtered.append(normalized)
+    return filtered
+
+
+def onboarding_unknowns(filled_slots: set[str]) -> list[dict[str, str]]:
+    combined = ONBOARDING_UNKNOWNS + default_unknowns()
+    return filter_unknowns(combined, filled_slots)
+
+
+def payload_filled_slots(payload: dict[str, Any]) -> set[str]:
+    slots = set(payload.get("updates", {}).keys())
+    if payload.get("anchor_examples"):
+        slots.add("anchor_examples")
+    return slots
+
+
+def build_guided_start_payload(answers: dict[str, str]) -> dict[str, Any]:
+    updates: dict[str, Any] = {}
+
+    priorities_answer = answers.get("values.priorities", "").strip()
+    for item in split_short_list(priorities_answer):
+        add_update_text(updates, "values.priorities", item)
+
+    advice_answer = answers.get("decision_model.default_questions", "").strip()
+    add_update_text(updates, "decision_model.default_questions", advice_answer)
+    add_update_text(updates, "decision_model.advice_style", f"给建议前会先问或先看：{advice_answer}", source="inferred")
+
+    boundary_answer = answers.get("interaction_style.boundary_style", "").strip()
+    add_update_text(updates, "interaction_style.boundary_style", boundary_answer)
+
+    if priorities_answer or advice_answer or boundary_answer:
+        summary = "；".join(
+            unique_nonempty(
+                [
+                    f"做重要决定时先保护{priorities_answer}" if priorities_answer else "",
+                    f"给建议前会先问或先看{advice_answer}" if advice_answer else "",
+                    f"不舒服时通常会{boundary_answer}" if boundary_answer else "",
+                ]
+            )
+        )
+        add_update_text(updates, "identity.self_summary", summary, source="inferred")
+
+    payload: dict[str, Any] = {
+        "route": "answer",
+        "mode_after": "interview",
+        "updates": updates,
+    }
+    filled_slots = payload_filled_slots(payload)
+    payload["unknowns"] = onboarding_unknowns(filled_slots)
+    payload["next_question"] = payload["unknowns"][0]["question"] if payload["unknowns"] else ""
+    return payload
+
+
+def build_freeform_start_payload(text: str) -> dict[str, Any]:
+    updates: dict[str, Any] = {}
+    add_update_text(updates, "identity.self_summary", text)
+
+    for sentence in split_sentences(text):
+        if any(marker in sentence for marker in ("在意", "优先", "保护", "看重")):
+            add_update_text(updates, "values.priorities", sentence)
+        if any(marker in sentence for marker in ("先问", "问自己", "先看什么")):
+            add_update_text(updates, "decision_model.default_questions", sentence)
+        elif any(marker in sentence for marker in ("先看", "取舍", "长期", "短期", "代价")):
+            add_update_text(updates, "decision_model.tradeoff_biases", sentence)
+        if any(marker in sentence for marker in ("建议", "安慰", "追问", "灌鸡汤", "帮对方")):
+            add_update_text(updates, "decision_model.advice_style", sentence)
+        if any(marker in sentence for marker in ("边界", "拒绝", "不舒服", "底线")):
+            add_update_text(updates, "interaction_style.boundary_style", sentence)
+
+    payload: dict[str, Any] = {
+        "route": "freeform",
+        "mode_after": "freeform",
+        "updates": updates,
+    }
+    filled_slots = payload_filled_slots(payload)
+    payload["unknowns"] = onboarding_unknowns(filled_slots)
+    payload["next_question"] = payload["unknowns"][0]["question"] if payload["unknowns"] else ""
+    return payload
+
+
+def demo_payload() -> dict[str, Any]:
+    repo_root = Path(__file__).resolve().parents[1]
+    with (repo_root / "examples" / "initial-freeform-payload.json").open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def build_correction_payload(text: str) -> dict[str, Any]:
+    updates: dict[str, Any] = {}
+    quotes = extract_quoted_phrases(text)
+    applies_to = "identity.self_summary"
+
+    taboo_fragment = first_clause(text_after_marker(text, ["我不会直接说", "我不会这么说", "我不会这样说"]))
+    if taboo_fragment:
+        applies_to = "voice.taboo_phrases"
+        add_update_text(updates, applies_to, taboo_fragment, source="correction")
+    elif quotes and any(marker in text for marker in ("我不会直接说", "我不会这么说", "我不会这样说")):
+        applies_to = "voice.taboo_phrases"
+        add_update_text(updates, applies_to, quotes[0], source="correction")
+
+    preferred_phrase = ""
+    if "更常说" in text and quotes:
+        preferred_phrase = quotes[-1]
+    else:
+        preferred_phrase = first_clause(text_after_marker(text, ["我更常说", "我会更常说", "我通常会说"]))
+    if preferred_phrase:
+        applies_to = "voice.signature_phrases"
+        add_update_text(updates, applies_to, preferred_phrase, source="correction")
+
+    priority_fragment = first_clause(text_after_marker(text, ["我更在意", "我更看重"]))
+    if priority_fragment:
+        applies_to = "values.priorities"
+        add_update_text(updates, applies_to, priority_fragment, source="correction")
+
+    question_fragment = first_clause(text_after_marker(text, ["这种情况下我会先问", "我通常会先问", "我会先问"]))
+    if question_fragment:
+        applies_to = "decision_model.default_questions"
+        add_update_text(updates, applies_to, question_fragment, source="correction")
+
+    if any(marker in text for marker in ("边界", "不舒服", "底线")):
+        applies_to = "interaction_style.boundary_style"
+        boundary_fragment = first_clause(text_after_marker(text, ["我会", "通常会"])) or text.strip()
+        if boundary_fragment and not boundary_fragment.startswith("我"):
+            boundary_fragment = f"我会{boundary_fragment}"
+        add_update_text(updates, applies_to, boundary_fragment, source="correction")
+
+    payload: dict[str, Any] = {
+        "route": "correction",
+        "mode_after": "correction",
+        "updates": updates,
+        "corrections": [{"text": text.strip(), "applies_to": applies_to}],
+    }
+    return payload
+
+
+def build_artifact_preview(profile: dict[str, Any], session: dict[str, Any]) -> str:
+    self_summary = normalize_claim(profile["identity"]["self_summary"], default_source="unknown")
+    summary_label = "暂定自我概括" if self_summary["source"] == "inferred" else "自我概括"
+    lines = [
+        "当前 preview：",
+        f"- {summary_label}：{self_summary['text'] or '还没有。'}",
+        f"- 优先保护：{'；'.join(claim_values(profile['values']['priorities'])[:3]) or '待补'}",
+        f"- 给建议前先问：{'；'.join(claim_values(profile['decision_model']['default_questions'])[:2]) or '待补'}",
+        f"- 设边界方式：{'；'.join(claim_values(profile['interaction_style']['boundary_style'])[:2]) or '待补'}",
+        f"- 下一步：{next_question_from_state(profile, session) or '可以继续补充案例或修正。'}",
+    ]
+    return "\n".join(lines)
+
+
 def classify_turn(text: str, current_mode: str = "interview") -> dict[str, str]:
     content = text.strip()
     if not content:
@@ -362,10 +667,7 @@ def initialize_double(root: Path, slug: str, display_name: str, language: str) -
 def next_question_from_state(profile: dict[str, Any], session: dict[str, Any]) -> str:
     if session.get("next_question"):
         return str(session["next_question"]).strip()
-    unknowns = profile.get("unknowns", [])
-    if unknowns:
-        return str(unknowns[0].get("question", "")).strip()
-    return ""
+    return next_question_from_profile(profile)
 
 
 def apply_turn(root: Path, slug: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -396,7 +698,7 @@ def apply_turn(root: Path, slug: str, payload: dict[str, Any]) -> dict[str, Any]
     profile["meta"]["completeness"] = compute_completeness(profile)
     session["mode"] = mode_after
     session["last_route"] = route
-    session["next_question"] = str(payload.get("next_question", "")).strip() or next_question_from_state(profile, session)
+    session["next_question"] = str(payload.get("next_question", "")).strip() or next_question_from_profile(profile)
     session["updated_at"] = now_iso()
 
     write_yaml(profile_path(root, slug), profile)
@@ -408,6 +710,234 @@ def apply_turn(root: Path, slug: str, payload: dict[str, Any]) -> dict[str, Any]
         "completeness": profile["meta"]["completeness"],
         "next_question": session["next_question"],
     }
+
+
+def default_start_slug(display_name: str, *, demo: bool = False) -> str:
+    if demo:
+        return DEMO_SLUG
+    try:
+        return normalize_slug(display_name)
+    except ValueError:
+        stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
+        return f"double-{stamp}"
+
+
+def start_double(
+    root: Path,
+    slug: str,
+    display_name: str,
+    language: str = "zh-CN",
+    *,
+    start_mode: str | None = None,
+    demo: bool = False,
+    ask: Any = input,
+    writer: Any = print,
+) -> dict[str, Any]:
+    require_yaml("start")
+    slug = normalize_slug(slug)
+    initialize_double(root, slug, display_name, language)
+
+    if writer:
+        writer(START_BANNER)
+
+    selected_mode = start_mode
+    if demo:
+        selected_mode = "demo"
+    elif selected_mode is None:
+        choice = str(ask(START_CHOICE_PROMPT)).strip()
+        if choice.lower() == "demo":
+            selected_mode = "demo"
+        elif choice == "我自己说":
+            selected_mode = "freeform"
+        else:
+            selected_mode = "guided"
+
+    if selected_mode == "demo":
+        payload = demo_payload()
+        payload["unknowns"] = onboarding_unknowns(payload_filled_slots(payload))
+        payload["next_question"] = payload["unknowns"][0]["question"] if payload["unknowns"] else ""
+    elif selected_mode == "freeform":
+        freeform_text = str(ask(f"{FREEFORM_HINT}\n> ")).strip()
+        if not freeform_text:
+            raise ValueError("freeform start needs at least one non-empty self-description")
+        payload = build_freeform_start_payload(freeform_text)
+    else:
+        answers: dict[str, str] = {}
+        for question in GUIDED_START_QUESTIONS:
+            answer = str(ask(question["prompt"])).strip()
+            answers[question["slot"]] = answer
+        payload = build_guided_start_payload(answers)
+        selected_mode = "guided"
+
+    apply_turn(root, slug, payload)
+    render_result = render_outputs(root, slug)
+    profile = load_yaml(profile_path(root, slug))
+    session = load_yaml(session_path(root, slug))
+    preview = build_artifact_preview(profile, session)
+    correction_applied = False
+
+    if writer:
+        writer("")
+        writer("已生成：")
+        writer(f"- profile.md: {render_result['profile_md']}")
+        writer(f"- SKILL.md: {render_result['skill']}")
+        writer("")
+        writer(preview)
+        writer("")
+
+    if not demo:
+        correction_text = str(ask(START_CORRECTION_PROMPT)).strip()
+        if correction_text:
+            correction_result = correct_double(root, slug, text=correction_text, ask=ask, writer=writer)
+            render_result = correction_result["render"]
+            profile = load_yaml(profile_path(root, slug))
+            session = load_yaml(session_path(root, slug))
+            preview = correction_result["preview"]
+            correction_applied = True
+
+    if writer and not stdout_is_utf8():
+        writer("提示：如果终端中文预览乱码，请先运行 `chcp 65001`，或直接打开生成的 profile.md。")
+        writer("")
+
+    if writer:
+        writer(f"继续补充：python scripts/double_builder.py correct --slug {slug}")
+
+    return {
+        "slug": slug,
+        "display_name": display_name,
+        "start_mode": selected_mode,
+        "correction_applied": correction_applied,
+        "preview": preview,
+        "next_question": next_question_from_state(profile, session),
+        "render": render_result,
+    }
+
+
+def correct_double(
+    root: Path,
+    slug: str,
+    *,
+    text: str | None = None,
+    ask: Any = input,
+    writer: Any = print,
+) -> dict[str, Any]:
+    require_yaml("correct")
+    slug = normalize_slug(slug)
+    ensure_exists(root, slug)
+    correction_text = (text or str(ask("输入一句 correction：\n> "))).strip()
+    if not correction_text:
+        raise ValueError("correction text cannot be empty")
+
+    profile_before = load_yaml(profile_path(root, slug))
+    payload = build_correction_payload(correction_text)
+    filled_slots = payload_filled_slots(payload)
+    payload["unknowns"] = filter_unknowns(profile_before.get("unknowns", []), filled_slots)
+    payload["next_question"] = payload["unknowns"][0]["question"] if payload["unknowns"] else ""
+    apply_turn(root, slug, payload)
+    render_result = render_outputs(root, slug)
+    profile = load_yaml(profile_path(root, slug))
+    session = load_yaml(session_path(root, slug))
+    preview = build_artifact_preview(profile, session)
+
+    if writer:
+        writer("")
+        writer("已应用 correction。")
+        writer(preview)
+        writer("")
+
+    return {
+        "slug": slug,
+        "text": correction_text,
+        "preview": preview,
+        "render": render_result,
+        "next_question": next_question_from_state(profile, session),
+    }
+
+
+def repo_validation_errors(root: Path) -> list[str]:
+    validator_path = root / "scripts" / "validate_repo.py"
+    if not validator_path.exists():
+        return ["缺少 scripts/validate_repo.py。"]
+    if yaml is None:
+        return ["PyYAML 未安装，暂时无法运行完整仓库校验。"]
+
+    spec = importlib.util.spec_from_file_location("validate_repo", validator_path)
+    if spec is None or spec.loader is None:
+        return ["无法加载 scripts/validate_repo.py。"]
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return list(module.validate(root))
+
+
+def write_access_ok(root: Path) -> tuple[bool, str]:
+    doubles_root = root / "doubles"
+    doubles_root.mkdir(parents=True, exist_ok=True)
+    probe = doubles_root / ".doctor-write-check"
+    try:
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as exc:
+        return False, str(exc)
+    return True, str(doubles_root)
+
+
+def doctor_report(root: Path) -> dict[str, Any]:
+    python_ok = sys.version_info >= (3, 9)
+    write_ok, write_detail = write_access_ok(root)
+    validation_errors = repo_validation_errors(root)
+    terminal_ok = stdout_is_utf8()
+
+    checks = [
+        {
+            "name": "Python",
+            "ok": python_ok,
+            "detail": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        },
+        {
+            "name": "PyYAML",
+            "ok": yaml is not None,
+            "detail": "已安装" if yaml is not None else "缺少 PyYAML，请先安装 requirements.txt",
+        },
+        {
+            "name": "Repo validation",
+            "ok": not validation_errors,
+            "detail": "通过" if not validation_errors else "；".join(validation_errors),
+        },
+        {
+            "name": "Write access",
+            "ok": write_ok,
+            "detail": write_detail if write_ok else f"无法写入 doubles/：{write_detail}",
+        },
+        {
+            "name": "UTF-8 terminal",
+            "ok": terminal_ok,
+            "detail": (
+                "终端编码看起来正常。"
+                if terminal_ok
+                else "当前终端可能不是 UTF-8；若出现乱码，请先运行 `chcp 65001`。"
+            ),
+        },
+    ]
+    ok = all(item["ok"] for item in checks[:-1]) and checks[-1]["ok"]
+    return {
+        "ok": ok,
+        "checks": checks,
+        "next_steps": [
+            "python -m pip install -r requirements.txt",
+            'python scripts/double_builder.py start --slug my-double --display-name "我的分身"',
+        ],
+    }
+
+
+def format_doctor_report(report: dict[str, Any]) -> str:
+    lines = ["create-double doctor", ""]
+    for check in report["checks"]:
+        label = "OK" if check["ok"] else "WARN"
+        lines.append(f"[{label}] {check['name']}: {check['detail']}")
+    lines.extend(["", "下一步："])
+    lines.extend([f"- {step}" for step in report["next_steps"]])
+    return "\n".join(lines)
 
 
 def snapshot_outputs(root: Path, slug: str) -> Path | None:
@@ -682,8 +1212,26 @@ def root_from_arg(raw_root: str | None) -> Path:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Local builder for create-double")
+    parser = argparse.ArgumentParser(
+        description="Local builder for create-double. Use `start` for the first run, and keep the lower-level commands for advanced workflows.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    start_cmd = subparsers.add_parser("start", help="interactive first-run flow with no JSON payloads")
+    start_cmd.add_argument("--slug")
+    start_cmd.add_argument("--display-name")
+    start_cmd.add_argument("--language", default="zh-CN")
+    start_cmd.add_argument("--mode", choices=["guided", "freeform"])
+    start_cmd.add_argument("--demo", action="store_true", help="generate a demo double instead of asking personal questions")
+    start_cmd.add_argument("--root")
+
+    correct_cmd = subparsers.add_parser("correct", help="apply one natural-language correction and rerender")
+    correct_cmd.add_argument("--slug", required=True)
+    correct_cmd.add_argument("--text")
+    correct_cmd.add_argument("--root")
+
+    doctor_cmd = subparsers.add_parser("doctor", help="check dependencies, repo health, write access, and terminal encoding")
+    doctor_cmd.add_argument("--root")
 
     init_cmd = subparsers.add_parser("init", help="initialize a new double")
     init_cmd.add_argument("--slug", required=True)
@@ -724,14 +1272,35 @@ def emit(data: Any) -> None:
 
 
 def main() -> None:
+    ensure_utf8_output()
     parser = build_parser()
     args = parser.parse_args()
 
     if args.command == "route":
         emit(classify_turn(args.text, current_mode=args.current_mode))
         return
-
     root = root_from_arg(getattr(args, "root", None))
+
+    if args.command == "doctor":
+        print(format_doctor_report(doctor_report(root)))
+        return
+
+    if args.command == "start":
+        display_name = args.display_name or ("演示分身" if args.demo else "我的分身")
+        slug = args.slug or default_start_slug(display_name, demo=args.demo)
+        start_double(
+            root,
+            slug,
+            display_name,
+            args.language,
+            start_mode=args.mode,
+            demo=args.demo,
+        )
+        return
+
+    if args.command == "correct":
+        correct_double(root, args.slug, text=args.text)
+        return
 
     if args.command == "init":
         emit(initialize_double(root, args.slug, args.display_name, args.language))

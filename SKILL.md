@@ -11,6 +11,22 @@ Build a Chinese-first digital double that stays local to this skill folder. Keep
 
 ## Quick Start
 
+### Fast path for a human first run
+
+If the user only wants the first visible artifact, prefer:
+
+```powershell
+python scripts/double_builder.py start --slug my-double --display-name "我的分身"
+```
+
+Use `correct` right after generation when the user says “我不会这么说” or “我更在意 X”:
+
+```powershell
+python scripts/double_builder.py correct --slug my-double
+```
+
+### Low-level path for Codex and custom workflows
+
 1. Initialize a new double:
 
    ```powershell
