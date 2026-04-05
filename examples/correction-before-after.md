@@ -1,21 +1,24 @@
 # correction before / after
 
 `create-double-skill` 的灵魂不是“一次生成”，而是“生成后能改”。
-
-下面是一个极简例子。
+在用途感知版本里，correction 还会顺手影响后续追问队列。
 
 ## before
 
 ```md
-## Signature Phrases
-Tentative:
-- 你应该先冷静一下
+## Snapshot
+- primary use case: `self-dialogue`
+- interview depth: `standard`
+- remaining questions: `2`
+
+### Taboo Phrases
+- none yet
 ```
 
 ## user correction
 
 ```text
-我不会直接说“你应该”，我更常说“如果是我，我会先把边界讲清楚”。
+我不会这么说“都会好的”，这种安慰会让我更想逃避。
 ```
 
 ## after
@@ -23,15 +26,15 @@ Tentative:
 ```md
 ## Taboo Phrases
 Confirmed:
-- 你应该
+- 都会好的
 
-## Signature Phrases
-Confirmed:
-- 如果是我，我会先把边界讲清楚
+## Corrections
+- [timestamp] voice.taboo_phrases: 我不会这么说“都会好的”，这种安慰会让我更想逃避。
 ```
 
-这种 correction 会同时做三件事：
+这种 correction 会同时做四件事：
 
 - 把原句记进 `corrections`
-- 把更像你的表达回写到结构化字段
+- 把更像你的表达或禁用表达回写到结构化字段
 - 重新渲染 `profile.md` 和 `SKILL.md`
+- 如果这句修正已经覆盖了某个待追问的问题，就把它从 `pending_questions` 里移走

@@ -1,51 +1,62 @@
 # generated artifacts
 
-`start` 跑完之后，你至少会看到这三类产物：
+`start` 跑完之后，你至少会看到这三类产物。
+在用途感知版本里，产物会明确写出这次 double 的主用途和访谈深度。
 
 ## 1. Canonical truth: `profile.yaml`
 
 ```yaml
+meta:
+  primary_use_case: work
 values:
   priorities:
-    - text: 长期可持续
+    - text: 可维护性
       source: direct
-    - text: 关系里的稳定感
+    - text: 长期可持续
       source: direct
 decision_model:
   default_questions:
-    - text: 我会先问这件事三个月后还重要吗
+    - text: 我会先问目标、成功标准和最不能出错的地方
       source: direct
 interaction_style:
   boundary_style:
-    - text: 我会把底线讲清楚，但尽量不把气氛推到最糟
+    - text: 我会先把风险讲清楚，再给出我能接受的最小范围
       source: direct
 ```
 
 ## 2. Human-readable snapshot: `profile.md`
 
 ```md
-## Priorities
+## Snapshot
+- primary use case: `work`
+- interview depth: `quick`
+- remaining questions: `2`
+
+### Priorities
 Confirmed:
+- 可维护性
 - 长期可持续
-- 关系里的稳定感
 
-## Default Questions
+### Default Questions
 Confirmed:
-- 我会先问这件事三个月后还重要吗
-
-## Boundary Style
-Confirmed:
-- 我会把底线讲清楚，但尽量不把气氛推到最糟
+- 我会先问目标、成功标准和最不能出错的地方
 ```
 
 ## 3. Runtime double: `SKILL.md`
 
 ```md
-## Confirmed Material
+## Runtime Contract
 
-- 优先级: 长期可持续；关系里的稳定感
-- 先问的问题: 我会先问这件事三个月后还重要吗
-- 设边界的方式: 我会把底线讲清楚，但尽量不把气氛推到最糟
+- 主要用途: work
+- 重点模仿判断方式、边界风格和建议结构
+- 遇到资料不足时，明确说这是推断，不伪造经历或记忆
 ```
 
-first success 的目标不是“字段填满”，而是先得到一个足够真实、可继续修正的第一版。
+现在 first success 的目标不是“字段填满”，而是先得到一个：
+
+- 有明确用途
+- 能看出判断方式
+- 能继续 correction
+- 能继续深挖细节
+
+的第一版。

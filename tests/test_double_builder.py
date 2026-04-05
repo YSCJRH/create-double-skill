@@ -20,6 +20,11 @@ class DoubleBuilderTests(unittest.TestCase):
     def tearDown(self):
         self.tempdir.cleanup()
 
+    def _reader(self, slug: str) -> tuple[dict, dict]:
+        profile = double_builder.load_yaml(double_builder.profile_path(self.root, slug))
+        session = double_builder.load_yaml(double_builder.session_path(self.root, slug))
+        return profile, session
+
     def test_route_recognizes_control_and_correction(self):
         routed = double_builder.classify_turn("继续提问", current_mode="freeform")
         self.assertEqual(routed["route"], "switch_mode")
@@ -29,131 +34,200 @@ class DoubleBuilderTests(unittest.TestCase):
         self.assertEqual(correction["route"], "correction")
         self.assertEqual(correction["mode_after"], "correction")
 
-    def test_apply_turn_merges_profile_and_unknowns(self):
-        payload = {
-            "route": "freeform",
-            "mode_after": "freeform",
-            "updates": {
-                "identity.self_summary": {
-                    "text": "一个做决定前会先看长期影响的人",
-                    "source": "direct",
-                },
-                "values.priorities": [
-                    {"text": "长期可持续", "source": "direct"},
-                    {"text": "关系稳定", "source": "inferred"},
-                ],
-                "decision_model.default_questions": [
-                    {"text": "这件事三个月后还重要吗？", "source": "direct"}
-                ],
-                "voice.tone": [{"text": "冷静但不冷淡", "source": "direct"}],
-            },
-            "anchor_examples": [
-                {
-                    "situation": "团队想快速上线一个判断还不稳定的功能",
-                    "choice": "先缩小范围",
-                    "reason": "不要让错误预期放大",
-                    "source": "direct",
-                }
-            ],
-            "unknowns": [
-                {
-                    "slot": "interaction_style.boundary_style",
-                    "question": "你不舒服时会怎么设边界？",
-                    "why": "这会影响冲突场景下的表达方式。",
-                }
-            ],
-            "next_question": "你不舒服时会怎么设边界？",
-        }
+    def test_show_and_render_keep_older_doubles_compatible(self):
+        profile, session = self._reader("my-double")
+        profile["meta"].pop("primary_use_case", None)
+        session.pop("interview_track", None)
+        session.pop("interview_depth", None)
+        session.pop("pending_questions", None)
+        session.pop("asked_questions", None)
+        double_builder.write_yaml(double_builder.profile_path(self.root, "my-double"), profile)
+        double_builder.write_yaml(double_builder.session_path(self.root, "my-double"), session)
 
-        result = double_builder.apply_turn(self.root, "my-double", payload)
-        self.assertEqual(result["mode_after"], "freeform")
-        self.assertGreater(result["completeness"], 0)
+        render_result = double_builder.render_outputs(self.root, "my-double")
+        state = double_builder.show_state(self.root, "my-double")
 
-        profile = double_builder.load_yaml(double_builder.profile_path(self.root, "my-double"))
-        self.assertEqual(profile["identity"]["self_summary"]["source"], "direct")
-        self.assertEqual(profile["unknowns"][0]["slot"], "interaction_style.boundary_style")
-        self.assertEqual(len(profile["anchor_examples"]), 1)
+        self.assertTrue(Path(render_result["profile_md"]).exists())
+        self.assertEqual(state["primary_use_case"], "general")
+        self.assertEqual(state["interview_depth"], "quick")
+        self.assertEqual(state["remaining_questions"], [])
 
-    def test_render_creates_outputs_and_history_on_second_render(self):
-        first_payload = {
-            "route": "answer",
-            "mode_after": "interview",
-            "updates": {
-                "values.priorities": [{"text": "长期可持续", "source": "direct"}],
-                "voice.response_pattern": [{"text": "先问背景，再给判断", "source": "direct"}],
-            },
-        }
-        second_payload = {
-            "route": "correction",
-            "mode_after": "correction",
-            "updates": {
-                "voice.taboo_phrases": [{"text": "你应该", "source": "correction"}]
-            },
-            "corrections": [
-                {
-                    "text": "我不会直接说'你应该'。",
-                    "applies_to": "voice.taboo_phrases",
-                }
-            ],
-        }
-
-        double_builder.apply_turn(self.root, "my-double", first_payload)
-        first_render = double_builder.render_outputs(self.root, "my-double")
-        self.assertTrue(Path(first_render["profile_md"]).exists())
-        self.assertTrue(Path(first_render["skill"]).exists())
-        self.assertIsNone(first_render["snapshot"])
-
-        double_builder.apply_turn(self.root, "my-double", second_payload)
-        second_render = double_builder.render_outputs(self.root, "my-double")
-        self.assertIsNotNone(second_render["snapshot"])
-
-        history_path = Path(second_render["snapshot"])
-        self.assertTrue((history_path / "profile.yaml").exists())
-        self.assertTrue((history_path / "SKILL.md").exists())
-
-    def test_start_creates_first_artifact_without_payload_file(self):
-        prompts = iter(
+    def test_start_work_quick_creates_artifact_and_pending_followups(self):
+        answers = iter(
             [
+                "可维护性、长期可持续、错误预期不要扩散",
+                "我会先问目标、成功标准和最不能出错的地方",
+                "我会先把风险讲清楚，再给出我能接受的最小范围",
                 "",
-                "长期可持续、关系里的稳定感",
-                "我会先问这件事三个月后还重要吗",
-                "我会把底线讲清楚，但尽量不把气氛推到最糟",
-                "我更在意边界清晰",
+                "",
             ]
         )
-        output_lines: list[str] = []
 
         result = double_builder.start_double(
             self.root,
-            "starter-double",
-            "起步分身",
-            ask=lambda prompt: next(prompts),
-            writer=output_lines.append,
+            "work-double",
+            "工作分身",
+            start_mode="guided",
+            use_case="work",
+            depth="quick",
+            ask=lambda _prompt: next(answers),
+            writer=lambda _text: None,
         )
 
-        self.assertTrue(result["correction_applied"])
+        profile, session = self._reader("work-double")
+        state = double_builder.show_state(self.root, "work-double")
+
+        self.assertEqual(result["primary_use_case"], "work")
+        self.assertEqual(profile["meta"]["primary_use_case"], "work")
+        self.assertEqual(session["interview_depth"], "quick")
+        self.assertEqual(
+            state["remaining_questions"],
+            ["work_disagreement_style", "work_tradeoff_biases"],
+        )
         self.assertTrue(Path(result["render"]["profile_md"]).exists())
         self.assertTrue(Path(result["render"]["skill"]).exists())
-        self.assertIn("继续补充：python scripts/double_builder.py correct --slug starter-double", output_lines[-1])
-
-        profile = double_builder.load_yaml(double_builder.profile_path(self.root, "starter-double"))
         priorities = [item["text"] for item in profile["values"]["priorities"]]
+        self.assertIn("可维护性", priorities)
         self.assertIn("长期可持续", priorities)
-        self.assertIn("关系里的稳定感", priorities)
-        self.assertIn("边界清晰", priorities)
-        self.assertGreaterEqual(len(profile["corrections"]), 1)
 
-    def test_correct_understands_natural_language_repair(self):
+    def test_start_self_dialogue_standard_asks_followups(self):
+        answers = iter(
+            [
+                "清醒、诚实、不要继续自我欺骗",
+                "我会先问这件事一周后还会不会让我难受",
+                "我会区分恢复精力和逃避责任",
+                "提醒我看清现实最有帮助",
+                "当我只是想先舒服一点时，最容易说服自己做会后悔的决定",
+                "",
+            ]
+        )
+
+        result = double_builder.start_double(
+            self.root,
+            "dialogue-double",
+            "自我对话分身",
+            start_mode="guided",
+            use_case="self-dialogue",
+            depth="standard",
+            ask=lambda _prompt: next(answers),
+            writer=lambda _text: None,
+        )
+
+        profile, session = self._reader("dialogue-double")
+
+        self.assertEqual(result["primary_use_case"], "self-dialogue")
+        self.assertEqual(session["interview_depth"], "standard")
+        self.assertEqual(
+            session["pending_questions"],
+            ["dialogue_taboo_phrases", "dialogue_anchor_example"],
+        )
+        self.assertEqual(len(session["asked_questions"]), 5)
+        support_style = [item["text"] for item in profile["interaction_style"]["support_style"]]
+        failure_patterns = [item["text"] for item in profile["decision_model"]["failure_patterns"]]
+        self.assertIn("提醒我看清现实最有帮助", support_style)
+        self.assertIn("当我只是想先舒服一点时，最容易说服自己做会后悔的决定", failure_patterns)
+
+    def test_start_external_deep_collects_anchor_example(self):
+        answers = iter(
+            [
+                "准确、清晰、别让别人误会我的边界",
+                "我会先确认这是不是我该公开说的话，以及会被谁看到",
+                "我会先把不方便公开的范围讲清楚",
+                "克制、直接、留有余地",
+                "我更像先给边界，再给结论",
+                "过度承诺、替别人做决定、把情绪当事实",
+                "朋友想让我公开评价一件争议事；我只讲了我能确认的部分；我不想制造超出事实的解读",
+                "",
+            ]
+        )
+
+        result = double_builder.start_double(
+            self.root,
+            "external-double",
+            "对外表达分身",
+            start_mode="guided",
+            use_case="external",
+            depth="deep",
+            ask=lambda _prompt: next(answers),
+            writer=lambda _text: None,
+        )
+
+        profile, session = self._reader("external-double")
+
+        self.assertEqual(result["interview_depth"], "deep")
+        self.assertEqual(profile["meta"]["primary_use_case"], "external")
+        self.assertEqual(session["pending_questions"], [])
+        self.assertGreaterEqual(len(profile["anchor_examples"]), 1)
+        example = profile["anchor_examples"][0]
+        self.assertEqual(example["situation"], "朋友想让我公开评价一件争议事")
+        self.assertEqual(example["choice"], "我只讲了我能确认的部分")
+        self.assertEqual(example["reason"], "我不想制造超出事实的解读")
+
+    def test_custom_deep_keeps_anchor_example_in_selected_questions(self):
+        questions, pending = double_builder.choose_guided_questions(
+            "work",
+            "deep",
+            custom_goal="帮我处理工作里的协作分歧",
+        )
+
+        follow_up_questions = questions[3:]
+        self.assertEqual(len(follow_up_questions), 4)
+        self.assertTrue(any(question["id"] == "custom_success_signal" for question in follow_up_questions))
+        self.assertTrue(any(question["kind"] == "anchor_example" for question in follow_up_questions))
+        self.assertEqual(pending, [])
+
+    def test_freeform_start_uses_track_specific_pending_questions(self):
+        answers = iter(
+            [
+                "在工作里我更在意长期可维护性。接到模糊任务时我会先问目标和成功标准。遇到不舒服的节奏时，我会先把风险讲清楚，再给出我能接受的最小范围。",
+                "",
+                "",
+            ]
+        )
+
+        result = double_builder.start_double(
+            self.root,
+            "work-freeform",
+            "工作自由描述分身",
+            start_mode="freeform",
+            use_case="work",
+            depth="quick",
+            ask=lambda _prompt: next(answers),
+            writer=lambda _text: None,
+        )
+
+        state = double_builder.show_state(self.root, "work-freeform")
+
+        self.assertEqual(result["primary_use_case"], "work")
+        self.assertEqual(state["remaining_questions"], ["work_disagreement_style", "work_tradeoff_biases"])
+        self.assertTrue(all(question_id.startswith("work_") for question_id in state["remaining_questions"]))
+
+    def test_correct_prunes_matching_pending_question(self):
         double_builder.apply_turn(
             self.root,
             "my-double",
             {
                 "route": "answer",
                 "mode_after": "interview",
-                "updates": {
-                    "voice.signature_phrases": [{"text": "你应该", "source": "inferred"}],
-                    "interaction_style.boundary_style": [{"text": "先忍着", "source": "inferred"}],
+                "meta_updates": {"primary_use_case": "self-dialogue"},
+                "session_updates": {
+                    "interview_track": "self-dialogue",
+                    "interview_depth": "standard",
+                    "pending_questions": ["dialogue_taboo_phrases", "dialogue_anchor_example"],
+                    "asked_questions": ["dialogue_support_style", "dialogue_failure_patterns"],
                 },
+                "unknowns": [
+                    {
+                        "slot": "voice.taboo_phrases",
+                        "question": "什么样的话对你来说看似安慰，实际上会让你更反感或更逃避？",
+                        "why": "这决定分身应该避免哪些无效安慰。",
+                    },
+                    {
+                        "slot": "anchor_examples",
+                        "question": "给我一个你最近从混乱中把自己拉回来的例子：发生了什么；你怎么做；为什么？",
+                        "why": "真实例子会让自我对话分身更有抓手。",
+                    },
+                ],
             },
         )
         double_builder.render_outputs(self.root, "my-double")
@@ -161,16 +235,13 @@ class DoubleBuilderTests(unittest.TestCase):
         double_builder.correct_double(
             self.root,
             "my-double",
-            text="我不会直接说'你应该'，我更常说'如果是我，我会先把边界讲清楚'。",
+            text="我不会这么说“都会好的”，这种安慰会让我更想逃避。",
             writer=lambda _text: None,
         )
 
-        profile = double_builder.load_yaml(double_builder.profile_path(self.root, "my-double"))
-        taboo_phrases = [item["text"] for item in profile["voice"]["taboo_phrases"]]
-        signature_phrases = [item["text"] for item in profile["voice"]["signature_phrases"]]
-        self.assertIn("你应该", taboo_phrases)
-        self.assertIn("如果是我，我会先把边界讲清楚", signature_phrases)
-        self.assertGreaterEqual(len(profile["corrections"]), 1)
+        _profile, session = self._reader("my-double")
+        self.assertEqual(session["pending_questions"], ["dialogue_anchor_example"])
+        self.assertIn("dialogue_taboo_phrases", session["asked_questions"])
 
     def test_doctor_reports_repo_health(self):
         report = double_builder.doctor_report(MODULE_PATH.parents[1])

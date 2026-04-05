@@ -4,6 +4,7 @@ meta:
   language: zh-CN
   version: 1
   completeness: 0.0
+  primary_use_case: general
 identity:
   self_summary:
     text: ""

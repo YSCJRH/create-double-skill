@@ -22,22 +22,31 @@ python -m pip install -r requirements.txt
 然后直接开始：
 
 ```powershell
-python scripts/double_builder.py start --slug my-double --display-name "我的分身"
+python scripts/double_builder.py start --slug my-work-double --display-name "工作分身" --use-case work
 ```
 
-你不需要手写 JSON。  
-你不需要先理解 schema、patch、payload。  
-你只需要回答 3 个高信号问题：
+现在 `start` 不再只有固定 3 问。  
+它会先问你**要哪一种分身**，再按用途和深度决定问题：
 
-- 你做重要决定时，通常先保护什么
-- 别人来找你要建议时，你通常会先问什么，或先看什么
-- 你不舒服时会怎么设边界
+- `general`
+  通用分身，先抓你的判断方式、给建议方式和边界感
+- `work`
+  工作协作版，先抓你的协作偏好、风险取舍和工作边界
+- `self-dialogue`
+  自我对话版，先抓你怎么把自己从混乱里拉回来
+- `external`
+  对外表达版，先抓你对外表达时的分寸感和边界
+- `custom`
+  先说你最想让这个分身帮你做什么，再映射到最接近的轨道
+
+默认深度是 `quick`，先让你在几分钟内拿到第一个 artifact。  
+如果你愿意，还可以继续走 `standard` 或 `deep`，让系统多问 2-4 个细化问题。
 
 3 分钟内你会得到：
 
-- `doubles/my-double/profile.yaml`
-- `doubles/my-double/profile.md`
-- `doubles/my-double/SKILL.md`
+- `doubles/<slug>/profile.yaml`
+- `doubles/<slug>/profile.md`
+- `doubles/<slug>/SKILL.md`
 - 一次自然发生的 correction 机会
 
 如果你想先检查环境，再开始第一次运行：
@@ -48,67 +57,104 @@ python scripts/double_builder.py doctor
 
 如果你在 Windows PowerShell 里看到中文预览乱码，先运行 `chcp 65001`，或者直接打开生成的 `profile.md`。
 
+## Choose Your Double
+
+### 工作协作版
+
+```powershell
+python scripts/double_builder.py start --slug my-work-double --display-name "工作分身" --use-case work
+```
+
+适合你想做一个：
+
+- 更像你在协作里怎么判断的分身
+- 更像你在 review / 风险取舍 / 对齐预期时怎么说话的分身
+
+### 自我对话版
+
+```powershell
+python scripts/double_builder.py start --slug my-dialogue-double --display-name "自我对话分身" --use-case self-dialogue
+```
+
+适合你想做一个：
+
+- 在你卡住、焦虑、内耗时更像你会怎么跟自己说话的分身
+- 更知道什么能把你拉回清醒、什么只是在糊弄自己的分身
+
+### 对外表达版
+
+```powershell
+python scripts/double_builder.py start --slug my-external-double --display-name "对外表达分身" --use-case external
+```
+
+适合你想做一个：
+
+- 更像你面向别人表达时的分寸感、边界感和节奏感的分身
+
+### 深度控制
+
+```powershell
+python scripts/double_builder.py start --slug my-double --display-name "我的分身" --use-case general --depth deep
+```
+
+- `quick`
+  3 个 base questions，先拿到 first artifact，再决定要不要继续
+- `standard`
+  3 个 base questions + 2 个 follow-ups
+- `deep`
+  3 个 base questions + 4 个 follow-ups，并补至少 1 个真实例子
+
 ## What You Get
 
 - 一个更关注“你会怎么判断”的 double，而不是只模仿说话语气
 - 一个可编辑的 `profile.yaml`，作为 canonical structured source of truth
+- 一个用途感知的 first-run 流程，而不是所有人都问同样 3 个问题
 - 一个可回写修正的流程：`我不会这么说`、`我更在意 X`、`这种情况下我会先问 Y`
 - 一个 uncertainty-aware 的 runtime `SKILL.md`，资料不足时会明确承认未知
 - 一个完全本地的工作流，默认不依赖外部 API 或高隐私自动抓取
 
 ## Quick Preview
 
-### 交互长这样
+### 工作协作版交互
 
 ```text
-$ python scripts/double_builder.py start --slug my-double --display-name "我的分身"
+$ python scripts/double_builder.py start --slug my-work-double --display-name "工作分身" --use-case work
 3 分钟内生成你的第一个 double，不需要写 JSON。
 
-1/3 你做重要决定时，通常先保护什么？
-> 长期可持续、关系里的稳定感
+1/3 在工作里你最先保护什么？是质量、速度、关系、可维护性，还是别的？
+> 可维护性、长期可持续、错误预期不要扩散
 
-2/3 别人来找你要建议时，你通常会先问什么，或先看什么？
-> 我会先问这件事三个月后还重要吗
+2/3 接到一个模糊任务时，你通常第一步会先问什么？
+> 我会先问目标、成功标准和最不能出错的地方
 
-3/3 你不舒服时会怎么设边界？
-> 我会把底线讲清楚，但尽量不把气氛推到最糟
-
-已生成：
-- doubles/my-double/profile.md
-- doubles/my-double/SKILL.md
-
-当前 preview：
-- 优先保护：长期可持续；关系里的稳定感
-- 给建议前先问：我会先问这件事三个月后还重要吗
-- 设边界方式：我会把底线讲清楚，但尽量不把气氛推到最糟
-
-如果有一句不对，直接输入“我不会这么说...”或“我更在意...”，回车跳过：
-> 我更在意边界清晰
+3/3 同事或项目节奏让你不舒服时，你会怎么立边界或校正预期？
+> 我会先把风险讲清楚，再给出我能接受的最小范围
 ```
 
 ### 产物大概长这样
 
-`profile.md` 会更强调你如何判断，而不是只记录你会怎么说话：
-
 ```md
+## Snapshot
+- primary use case: `work`
+- interview depth: `quick`
+
 ## Priorities
 Confirmed:
+- 可维护性
 - 长期可持续
-- 关系里的稳定感
-- 边界清晰
+- 错误预期不要扩散
 
 ## Default Questions
 Confirmed:
-- 我会先问这件事三个月后还重要吗
-
-## Boundary Style
-Confirmed:
-- 我会把底线讲清楚，但尽量不把气氛推到最糟
+- 我会先问目标、成功标准和最不能出错的地方
 ```
 
 更多真实示例在：
 
-- [examples/start-transcript.md](examples/start-transcript.md)
+- [examples/start-transcript-general.md](examples/start-transcript-general.md)
+- [examples/start-transcript-work.md](examples/start-transcript-work.md)
+- [examples/start-transcript-self-dialogue.md](examples/start-transcript-self-dialogue.md)
+- [examples/start-transcript-external.md](examples/start-transcript-external.md)
 - [examples/generated-artifacts.md](examples/generated-artifacts.md)
 - [examples/correction-before-after.md](examples/correction-before-after.md)
 
@@ -117,13 +163,13 @@ Confirmed:
 第一次成功之后，最重要的不是“继续堆资料”，而是先做一次 correction。
 
 ```powershell
-python scripts/double_builder.py correct --slug my-double
+python scripts/double_builder.py correct --slug my-work-double
 ```
 
 然后直接输入一句自然语言：
 
 ```text
-我不会直接说“你应该”，我更常说“如果是我，我会先把边界讲清楚”。
+我不会直接说“你应该”，我更常说“如果是我，我会先把风险讲清楚再决定”。
 ```
 
 这个命令会：
@@ -131,29 +177,32 @@ python scripts/double_builder.py correct --slug my-double
 - 记录 correction
 - 回写到 `profile.yaml`
 - 重新渲染 `profile.md` 和 `SKILL.md`
+- 从当前 track 的待追问队列里移除已经被纠正覆盖的问题
 
-## Choose Your Path
+## Freeform Still Works
 
-- 我只想先生成第一个 double
-  先看本页的 `3-Minute First Success`
-- 我想理解 prompts / schema / rendering
-  看 [references/profile-schema.md](references/profile-schema.md)、[references/payloads.md](references/payloads.md)、[prompts/](prompts)
-- 我想把它接入 Codex / skill workflow / 自定义管线
-  看 [SKILL.md](SKILL.md) 和 [agents/openai.yaml](agents/openai.yaml)
+如果你不想逐题回答，仍然可以：
+
+```powershell
+python scripts/double_builder.py start --slug my-dialogue-double --display-name "自我对话分身" --use-case self-dialogue --mode freeform
+```
+
+这时你先写一段自由自述，系统会先生成第一版，再把后续追问切到对应 track，而不是退回通用问题。
 
 ## Why It Feels Like “How I Judge”
 
-这个项目刻意把 first run 的问题放在判断、建议、边界上，而不是 biography 上。
+这个项目刻意把问题设计成用途感知的：
 
-- 它先问你做重要决定时保护什么
-- 再问你别人来找你要建议时先看什么
-- 再问你不舒服时怎么设边界
+- 工作版先问协作、风险和预期管理
+- 自我对话版先问如何把自己拉回清醒
+- 对外版先问如何对外表达和如何设边界
 
-这意味着第一版 double 更容易抓到的是：
+所以第一版 double 更容易抓到的是：
 
 - 你的取舍顺序
 - 你的默认提问方式
 - 你的边界感
+- 你的具体使用场景
 
 而不是只做一个会模仿你语气的角色。
 
@@ -177,7 +226,7 @@ python scripts/double_builder.py correct --slug my-double
 面向第一次使用者的命令：
 
 - `start`
-  初始化、提问、写入、渲染、预览、一次 correction
+  先选用途，再按 `quick / standard / deep` 访谈、渲染和预览
 - `correct`
   用一句自然语言修正现有 double
 - `doctor`
@@ -203,15 +252,18 @@ python scripts/double_builder.py --help
 
 第一次使用者优先看：
 
-- [examples/start-transcript.md](examples/start-transcript.md)
+- [examples/start-transcript-general.md](examples/start-transcript-general.md)
+- [examples/start-transcript-work.md](examples/start-transcript-work.md)
+- [examples/start-transcript-self-dialogue.md](examples/start-transcript-self-dialogue.md)
+- [examples/start-transcript-external.md](examples/start-transcript-external.md)
 - [examples/generated-artifacts.md](examples/generated-artifacts.md)
 - [examples/correction-before-after.md](examples/correction-before-after.md)
 
 如果你想继续用低层命令或自己写 payload，再看：
 
 - [examples/README.md](examples/README.md)
-- [examples/initial-freeform-payload.json](examples/initial-freeform-payload.json)
-- [examples/correction-payload.json](examples/correction-payload.json)
+- [references/profile-schema.md](references/profile-schema.md)
+- [references/payloads.md](references/payloads.md)
 
 ## Story
 
@@ -219,15 +271,17 @@ python scripts/double_builder.py --help
 
 如果“你”不是单一、稳定、完整的一块东西，而是由多个彼此拉扯的自我版本组成，那么数字分身到底应该复制哪一个？
 
-`create-double-skill` 给出的回答不是“找出唯一真实答案”，而是先把不同版本的你变成可编辑的结构：
+`create-double-skill` 给出的回答不是“找出唯一真实答案”，而是先把不同版本的你变成可编辑的结构。
 
-- 你表现出来的自己：平时如何说话、如何判断、如何与人相处
-- 你理想中的自己：你认同什么原则，你希望自己成为什么样的人
-- 你更底层的自己：你在压力、欲望、恐惧和逃避里会如何反应
+现在，它还多了一层更实际的回答：
 
-这里借用了“表现自我 / 理想自我 / 更底层的自我”这样的理解框架。  
-如果你愿意，也可以把它类比成“社会化的我、超我的我、本我的我”。  
-但这个项目不是在替你做心理诊断，而是在给你一个可修正、可比较、可继续追问“我是谁”的工程化起点。
+你并不总是在同一种场景里需要“自己”。
+
+- 有时你需要一个更像你在工作里怎么判断的分身
+- 有时你需要一个更像你和自己对话时怎么拉自己一把的分身
+- 有时你需要一个更像你对外表达时如何拿捏分寸的分身
+
+所以这个项目不再假设“所有人第一次都该被问同样 3 个问题”，而是允许你先定义这次最想构建的是哪一种自己。
 
 ## For Codex And Other AI Coding Assistants
 
@@ -242,26 +296,31 @@ python scripts/double_builder.py --help
 1. 安装 requirements.txt 里的依赖
 2. 运行 python scripts/validate_repo.py
 3. 运行 python -m unittest tests/test_double_builder.py -v
-4. 如果检查都通过，直接帮我用 start 命令走通第一次生成
+4. 如果检查都通过，直接帮我用 start 命令走通一次 work 或 self-dialogue 的第一次生成
 5. 如果有报错，请直接修复，或者明确告诉我卡在哪里
 ```
 
 ## FAQ
 
-### 我需要写 JSON 吗
+### 我还需要写 JSON 吗
 
 第一次成功不需要。  
 `start` 和 `correct` 都是自然语言入口。  
 只有在你想走低层工作流或自定义 patch 时，才需要碰 payload。
 
+### 如果我想做多个用途的分身怎么办
+
+当前推荐做多个 slug，而不是把多个侧面硬塞进同一个 profile。
+
+例如：
+
+- `my-work-double`
+- `my-dialogue-double`
+- `my-external-double`
+
 ### 它会上传我的数据吗
 
 默认不会。当前版本是 local-first，产物默认只留在本地 `doubles/`。
-
-### 它是在模仿我说话，还是在建模我怎么判断
-
-两者都会碰到，但第一优先级是后者。  
-P0 的 first run 故意先问取舍、建议和边界，而不是先问口头禅。
 
 ### 不用 Codex 能跑吗
 
@@ -274,8 +333,6 @@ P0 的 first run 故意先问取舍、建议和边界，而不是先问口头禅
 ```powershell
 python scripts/double_builder.py correct --slug my-double
 ```
-
-或者继续走高级路径，用 `apply-turn` 合并你自己的 payload。
 
 ### `profile.yaml` 和 `SKILL.md` 有什么关系
 
@@ -292,10 +349,10 @@ python -m unittest tests/test_double_builder.py -v
 
 ## More Project Docs
 
+- [SKILL.md](SKILL.md)
+- [prompts/interview.md](prompts/interview.md)
 - [docs/github-publication-kit.md](docs/github-publication-kit.md)
 - [docs/benchmark-review.md](docs/benchmark-review.md)
-- [docs/pre-release-checklist.md](docs/pre-release-checklist.md)
-- [docs/release-v0.1.0.md](docs/release-v0.1.0.md)
 
 ## License
 

@@ -32,6 +32,27 @@ Valid `source` values:
 - `correction`: a later repair that should outrank previous guesses
 - `unknown`: reserved for blank single-value fields at initialization
 
+### Meta
+
+```yaml
+meta:
+  slug: "my-double"
+  display_name: "我的分身"
+  language: "zh-CN"
+  version: 3
+  completeness: 0.42
+  primary_use_case: "work"
+```
+
+`primary_use_case` records the main job this double was created for.
+
+Valid values:
+
+- `general`
+- `work`
+- `self-dialogue`
+- `external`
+
 ### Identity
 
 ```yaml

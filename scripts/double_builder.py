@@ -10,6 +10,7 @@ import re
 import shutil
 import sys
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -43,46 +44,39 @@ LIST_CLAIM_FIELDS = {
 ALLOWED_UPDATE_PATHS = SINGLE_CLAIM_FIELDS | LIST_CLAIM_FIELDS
 SOURCE_PRIORITY = {"unknown": 0, "inferred": 1, "direct": 2, "correction": 3}
 START_BANNER = "3 分钟内生成你的第一个 double，不需要写 JSON。"
-START_CHOICE_PROMPT = '按回车开始 3 个问题；输入 "我自己说" 改成一段自述；输入 "demo" 先看演示： '
+START_CHOICE_PROMPT = '按回车按引导问题开始；输入 "我自己说" 改成一段自述；输入 "demo" 先看演示： '
 START_CORRECTION_PROMPT = '如果有一句不对，直接输入“我不会这么说...”或“我更在意...”，回车跳过： '
-GUIDED_START_QUESTIONS = [
-    {
-        "slot": "values.priorities",
-        "prompt": "1/3 你做重要决定时，通常先保护什么？\n> ",
-        "why": "这决定分身的整体取舍顺序。",
-    },
-    {
-        "slot": "decision_model.default_questions",
-        "prompt": "2/3 别人来找你要建议时，你通常会先问什么，或先看什么？\n> ",
-        "why": "这决定分身给建议时先抓什么。",
-    },
-    {
-        "slot": "interaction_style.boundary_style",
-        "prompt": "3/3 你不舒服时会怎么设边界？\n> ",
-        "why": "这会影响分身在压力和冲突下的表现。",
-    },
-]
-ONBOARDING_UNKNOWNS = [
-    {
-        "slot": "interaction_style.support_style",
-        "question": "别人低落或混乱时，你更像是安抚、追问，还是帮对方看清取舍？",
-        "why": "这会影响分身给建议时的陪伴方式。",
-    },
-    {
-        "slot": "voice.tone",
-        "question": "别人会怎么形容你的语气和说话节奏？",
-        "why": "这会影响分身听起来像不像你。",
-    },
-    {
-        "slot": "anchor_examples",
-        "question": "给我一个你最近做取舍的真实小例子：发生了什么、你怎么选、为什么？",
-        "why": "高信号案例会让分身更像你怎么判断。",
-    },
-]
 FREEFORM_HINT = (
     "请用 3-6 句描述你自己，重点写你怎么判断、怎么给建议、怎么设边界。"
 )
 DEMO_SLUG = "demo-double"
+USE_CASES = ("general", "work", "self-dialogue", "external", "custom")
+INTERVIEW_DEPTHS = ("quick", "standard", "deep")
+USE_CASE_LABELS = {
+    "general": "通用分身",
+    "work": "工作协作版",
+    "self-dialogue": "自我对话版",
+    "external": "对外表达版",
+    "custom": "自定义用途",
+}
+USE_CASE_PROMPT = (
+    "先选你要哪一种分身：\n"
+    "1. general 通用分身（推荐）\n"
+    "2. work 工作协作版\n"
+    "3. self-dialogue 自我对话版\n"
+    "4. external 对外表达版\n"
+    "5. custom 自定义用途\n"
+    "> "
+)
+DEPTH_PROMPT = (
+    "这次想问到多深？\n"
+    "1. quick 快速起步（推荐）\n"
+    "2. standard 多问 2 个细化问题\n"
+    "3. deep 更深入地问 4 个问题并补一个真实例子\n"
+    "> "
+)
+CONTINUE_DETAIL_PROMPT = '要不要继续细化 2 个问题？输入 "y" 继续，回车跳过： '
+CUSTOM_GOAL_PROMPT = "这次你最想让这个分身帮你做什么？\n> "
 
 
 def now_iso() -> str:
@@ -112,6 +106,174 @@ def stdout_is_utf8() -> bool:
     return "utf" in encoding
 
 
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def question_tracks_path() -> Path:
+    return repo_root() / "assets" / "question-tracks.yaml"
+
+
+@lru_cache(maxsize=1)
+def load_question_tracks() -> dict[str, Any]:
+    require_yaml("question tracks")
+    path = question_tracks_path()
+    with path.open("r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle) or {}
+    tracks = data.get("tracks", {})
+    if not isinstance(tracks, dict) or not tracks:
+        raise ValueError("assets/question-tracks.yaml must define a non-empty tracks mapping")
+    return tracks
+
+
+def question_index() -> dict[str, dict[str, Any]]:
+    indexed: dict[str, dict[str, Any]] = {}
+    for track in load_question_tracks().values():
+        for section in ("base_questions", "follow_up_questions"):
+            for question in track.get(section, []):
+                indexed[str(question["id"])] = question
+    return indexed
+
+
+def questions_from_ids(ids: list[str]) -> list[dict[str, Any]]:
+    index = question_index()
+    return [normalize_question(index[question_id]) for question_id in ids if question_id in index]
+
+
+def normalize_use_case(value: str | None) -> str:
+    normalized = (value or "").strip().lower()
+    aliases = {
+        "": "general",
+        "1": "general",
+        "general": "general",
+        "通用": "general",
+        "通用分身": "general",
+        "2": "work",
+        "work": "work",
+        "工作": "work",
+        "工作版": "work",
+        "工作分身": "work",
+        "工作协作": "work",
+        "工作协作版": "work",
+        "3": "self-dialogue",
+        "self-dialogue": "self-dialogue",
+        "self dialogue": "self-dialogue",
+        "自我对话": "self-dialogue",
+        "自我对话版": "self-dialogue",
+        "4": "external",
+        "external": "external",
+        "对外": "external",
+        "对外表达": "external",
+        "对外表达版": "external",
+        "5": "custom",
+        "custom": "custom",
+        "自定义": "custom",
+        "自定义用途": "custom",
+    }
+    if normalized not in aliases:
+        raise ValueError(f"unsupported use case '{value}'")
+    return aliases[normalized]
+
+
+def normalize_interview_depth(value: str | None) -> str:
+    normalized = (value or "").strip().lower()
+    aliases = {
+        "": "quick",
+        "1": "quick",
+        "quick": "quick",
+        "快速": "quick",
+        "快速起步": "quick",
+        "2": "standard",
+        "standard": "standard",
+        "标准": "standard",
+        "标准版": "standard",
+        "3": "deep",
+        "deep": "deep",
+        "深入": "deep",
+        "深度": "deep",
+    }
+    if normalized not in aliases:
+        raise ValueError(f"unsupported interview depth '{value}'")
+    return aliases[normalized]
+
+
+def prompt_for_use_case(ask: Any) -> str:
+    return normalize_use_case(str(ask(USE_CASE_PROMPT)).strip() or "general")
+
+
+def prompt_for_depth(ask: Any) -> str:
+    return normalize_interview_depth(str(ask(DEPTH_PROMPT)).strip() or "quick")
+
+
+def track_definition(use_case: str) -> dict[str, Any]:
+    tracks = load_question_tracks()
+    if use_case not in tracks:
+        raise ValueError(f"missing question track '{use_case}'")
+    return tracks[use_case]
+
+
+def question_to_unknown(question: dict[str, Any]) -> dict[str, str]:
+    return {
+        "slot": str(question["slot"]).strip(),
+        "question": str(question["prompt"]).strip(),
+        "why": str(question.get("why", "")).strip(),
+    }
+
+
+def track_default_unknowns(use_case: str) -> list[dict[str, str]]:
+    track = track_definition(use_case)
+    questions = track.get("base_questions", [])[:3] + track.get("follow_up_questions", [])[:3]
+    return [question_to_unknown(question) for question in questions]
+
+
+def infer_use_case_from_custom_goal(text: str) -> str:
+    content = text.strip().lower()
+    if any(keyword in content for keyword in ("工作", "协作", "同事", "项目", "review", "代码", "沟通", "会议")):
+        return "work"
+    if any(keyword in content for keyword in ("内耗", "焦虑", "卡住", "自我", "情绪", "反思", "安慰", "复盘")):
+        return "self-dialogue"
+    if any(keyword in content for keyword in ("别人", "公开", "发言", "社交", "对外", "表达", "介绍", "回复")):
+        return "external"
+    return "general"
+
+
+def follow_up_limit(depth: str) -> int:
+    if depth == "standard":
+        return 2
+    if depth == "deep":
+        return 4
+    return 0
+
+
+def pick_follow_up_questions(use_case: str, depth: str) -> list[dict[str, Any]]:
+    if depth == "quick":
+        return []
+
+    picked: list[dict[str, Any]] = []
+    for question in track_definition(use_case).get("follow_up_questions", []):
+        picked.append(question)
+        if len(picked) >= follow_up_limit(depth):
+            break
+
+    if depth == "deep" and not any(question.get("kind") == "anchor_example" for question in picked):
+        for question in track_definition(use_case).get("follow_up_questions", []):
+            if question.get("kind") == "anchor_example" and question not in picked:
+                picked[-1:] = [question]
+                break
+    return picked
+
+
+def pending_questions_for_depth(use_case: str, depth: str, asked_ids: set[str]) -> list[dict[str, Any]]:
+    follow_ups = track_definition(use_case).get("follow_up_questions", [])
+    if depth == "quick":
+        candidates = follow_ups[:2]
+    elif depth == "standard":
+        candidates = follow_ups[2:4]
+    else:
+        candidates = follow_ups[4:]
+    return [question for question in candidates if question["id"] not in asked_ids]
+
+
 def normalize_slug(value: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower())
     slug = re.sub(r"-{2,}", "-", slug).strip("-")
@@ -121,28 +283,7 @@ def normalize_slug(value: str) -> str:
 
 
 def default_unknowns() -> list[dict[str, str]]:
-    return [
-        {
-            "slot": "values.priorities",
-            "question": "你做重要决定时，通常先保护什么？",
-            "why": "这决定分身的整体取舍顺序。",
-        },
-        {
-            "slot": "decision_model.default_questions",
-            "question": "你做判断前最先会问自己的问题是什么？",
-            "why": "这决定分身遇事时的第一反应。",
-        },
-        {
-            "slot": "voice.tone",
-            "question": "别人会怎么形容你的语气和说话节奏？",
-            "why": "这决定分身听起来像不像你。",
-        },
-        {
-            "slot": "interaction_style.boundary_style",
-            "question": "你不舒服时会怎么设边界？",
-            "why": "这会影响分身在冲突和压力下的表现。",
-        },
-    ]
+    return track_default_unknowns("general")
 
 
 def blank_profile(slug: str, display_name: str, language: str = "zh-CN") -> dict[str, Any]:
@@ -153,6 +294,7 @@ def blank_profile(slug: str, display_name: str, language: str = "zh-CN") -> dict
             "language": language,
             "version": 1,
             "completeness": 0.0,
+            "primary_use_case": "general",
         },
         "identity": {
             "self_summary": {"text": "", "source": "unknown"},
@@ -192,9 +334,31 @@ def blank_session(profile: dict[str, Any]) -> dict[str, Any]:
     return {
         "mode": "interview",
         "last_route": "switch_mode",
+        "interview_track": str(profile["meta"].get("primary_use_case", "general")),
+        "interview_depth": "quick",
+        "pending_questions": [],
+        "asked_questions": [],
         "next_question": next_question,
         "updated_at": now_iso(),
     }
+
+
+def ensure_profile_defaults(profile: dict[str, Any]) -> dict[str, Any]:
+    profile.setdefault("meta", {})
+    profile["meta"].setdefault("primary_use_case", "general")
+    return profile
+
+
+def ensure_session_defaults(session: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
+    session.setdefault("mode", "interview")
+    session.setdefault("last_route", "switch_mode")
+    session.setdefault("interview_track", str(profile.get("meta", {}).get("primary_use_case", "general")))
+    session.setdefault("interview_depth", "quick")
+    session.setdefault("pending_questions", [])
+    session.setdefault("asked_questions", [])
+    session.setdefault("next_question", next_question_from_profile(profile))
+    session.setdefault("updated_at", now_iso())
+    return session
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -465,11 +629,6 @@ def filter_unknowns(unknowns: list[dict[str, str]], filled_slots: set[str]) -> l
     return filtered
 
 
-def onboarding_unknowns(filled_slots: set[str]) -> list[dict[str, str]]:
-    combined = ONBOARDING_UNKNOWNS + default_unknowns()
-    return filter_unknowns(combined, filled_slots)
-
-
 def payload_filled_slots(payload: dict[str, Any]) -> set[str]:
     slots = set(payload.get("updates", {}).keys())
     if payload.get("anchor_examples"):
@@ -477,68 +636,269 @@ def payload_filled_slots(payload: dict[str, Any]) -> set[str]:
     return slots
 
 
-def build_guided_start_payload(answers: dict[str, str]) -> dict[str, Any]:
-    updates: dict[str, Any] = {}
+def format_question_prompt(question: dict[str, Any], index: int, total: int) -> str:
+    return f"{index}/{total} {question['prompt']}\n> "
 
-    priorities_answer = answers.get("values.priorities", "").strip()
-    for item in split_short_list(priorities_answer):
-        add_update_text(updates, "values.priorities", item)
 
-    advice_answer = answers.get("decision_model.default_questions", "").strip()
-    add_update_text(updates, "decision_model.default_questions", advice_answer)
-    add_update_text(updates, "decision_model.advice_style", f"给建议前会先问或先看：{advice_answer}", source="inferred")
+def normalize_question(question: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(question["id"]).strip(),
+        "slot": str(question["slot"]).strip(),
+        "prompt": str(question["prompt"]).strip(),
+        "why": str(question.get("why", "")).strip(),
+        "kind": str(question.get("kind", "claim")).strip(),
+        "track": str(question.get("track", "")).strip(),
+        "depth": str(question.get("depth", "quick")).strip(),
+    }
 
-    boundary_answer = answers.get("interaction_style.boundary_style", "").strip()
-    add_update_text(updates, "interaction_style.boundary_style", boundary_answer)
 
-    if priorities_answer or advice_answer or boundary_answer:
-        summary = "；".join(
-            unique_nonempty(
-                [
-                    f"做重要决定时先保护{priorities_answer}" if priorities_answer else "",
-                    f"给建议前会先问或先看{advice_answer}" if advice_answer else "",
-                    f"不舒服时通常会{boundary_answer}" if boundary_answer else "",
-                ]
-            )
-        )
+def custom_follow_up_question(custom_goal: str) -> dict[str, Any]:
+    question = normalize_question(track_definition("custom")["follow_up_questions"][0])
+    question["prompt"] = question["prompt"].replace("{custom_goal}", custom_goal)
+    return question
+
+
+def parse_anchor_example_answer(text: str) -> dict[str, str] | None:
+    value = text.strip().strip("。")
+    parts = [part.strip() for part in re.split(r"[；;]", value) if part.strip()]
+    if len(parts) >= 3:
+        return {
+            "situation": parts[0],
+            "choice": parts[1],
+            "reason": parts[2],
+            "source": "direct",
+        }
+
+    if "因为" in value:
+        before_reason, reason = value.rsplit("因为", 1)
+        clauses = [part.strip() for part in re.split(r"[，,]", before_reason) if part.strip()]
+        if len(clauses) >= 2 and reason.strip():
+            return {
+                "situation": clauses[0],
+                "choice": "，".join(clauses[1:]),
+                "reason": reason.strip(),
+                "source": "direct",
+            }
+    return None
+
+
+def apply_question_answer(payload: dict[str, Any], question: dict[str, Any], answer: str) -> bool:
+    text = answer.strip()
+    if not text:
+        return False
+
+    kind = question.get("kind", "claim")
+    slot = question["slot"]
+    updates = payload.setdefault("updates", {})
+
+    if kind == "claim":
+        add_update_text(updates, slot, text)
+        return True
+
+    if kind == "list":
+        for item in split_short_list(text):
+            add_update_text(updates, slot, item)
+        return True
+
+    if kind == "anchor_example":
+        example = parse_anchor_example_answer(text)
+        if example:
+            payload.setdefault("anchor_examples", []).append(example)
+            return True
+        return False
+
+    raise ValueError(f"unsupported question kind '{kind}'")
+
+
+def asked_question_ids(entries: list[dict[str, Any]]) -> list[str]:
+    return [entry["question"]["id"] for entry in entries if entry.get("applied")]
+
+
+def unresolved_questions(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [entry["question"] for entry in entries if not entry.get("applied")]
+
+
+def summary_from_profile_payload(updates: dict[str, Any]) -> str:
+    priorities = "；".join(
+        claim["text"] for claim in updates.get("values.priorities", []) if claim.get("text")
+    )
+    default_questions = "；".join(
+        claim["text"] for claim in updates.get("decision_model.default_questions", []) if claim.get("text")
+    )
+    boundary_style = "；".join(
+        claim["text"] for claim in updates.get("interaction_style.boundary_style", []) if claim.get("text")
+    )
+    support_style = "；".join(
+        claim["text"] for claim in updates.get("interaction_style.support_style", []) if claim.get("text")
+    )
+    parts = unique_nonempty(
+        [
+            f"做重要决定时先保护{priorities}" if priorities else "",
+            f"给建议前会先问或先看{default_questions}" if default_questions else "",
+            f"不舒服时通常会{boundary_style}" if boundary_style else "",
+            f"支持别人时更像{support_style}" if support_style else "",
+        ]
+    )
+    return "；".join(parts)
+
+
+def enrich_start_payload(payload: dict[str, Any], use_case: str, custom_goal: str | None = None) -> None:
+    updates = payload.setdefault("updates", {})
+
+    default_questions = "；".join(
+        claim["text"] for claim in updates.get("decision_model.default_questions", []) if claim.get("text")
+    )
+    if default_questions and not updates.get("decision_model.advice_style"):
+        add_update_text(updates, "decision_model.advice_style", f"给建议前会先问或先看：{default_questions}", source="inferred")
+
+    if custom_goal:
+        add_update_text(updates, "identity.contexts", f"这次最想让分身帮我：{custom_goal}")
+
+    if use_case == "work":
+        add_update_text(updates, "identity.contexts", "主要用于工作协作和判断", source="inferred")
+    elif use_case == "self-dialogue":
+        add_update_text(updates, "identity.contexts", "主要用于自我对话和整理内在判断", source="inferred")
+    elif use_case == "external":
+        add_update_text(updates, "identity.contexts", "主要用于面向他人的表达和边界拿捏", source="inferred")
+
+    summary = summary_from_profile_payload(updates)
+    if summary:
         add_update_text(updates, "identity.self_summary", summary, source="inferred")
 
-    payload: dict[str, Any] = {
-        "route": "answer",
-        "mode_after": "interview",
-        "updates": updates,
+
+def build_session_update(track: str, depth: str, pending_questions: list[dict[str, Any]], asked_ids: list[str]) -> dict[str, Any]:
+    return {
+        "interview_track": track,
+        "interview_depth": depth,
+        "pending_questions": [question["id"] for question in pending_questions],
+        "asked_questions": asked_ids,
     }
-    filled_slots = payload_filled_slots(payload)
-    payload["unknowns"] = onboarding_unknowns(filled_slots)
+
+
+def build_start_payload(
+    *,
+    route: str,
+    mode_after: str,
+    use_case: str,
+    depth: str,
+    answered_entries: list[dict[str, Any]],
+    pending_questions: list[dict[str, Any]],
+    custom_goal: str | None = None,
+    existing_asked_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "route": route,
+        "mode_after": mode_after,
+        "updates": {},
+        "meta_updates": {"primary_use_case": use_case},
+    }
+
+    for entry in answered_entries:
+        if entry.get("applied"):
+            apply_question_answer(payload, entry["question"], entry["answer"])
+
+    enrich_start_payload(payload, use_case, custom_goal=custom_goal)
+    unresolved = unresolved_questions(answered_entries)
+    full_pending = unresolved + pending_questions
+    payload["unknowns"] = [question_to_unknown(question) for question in full_pending]
     payload["next_question"] = payload["unknowns"][0]["question"] if payload["unknowns"] else ""
+    asked_ids = unique_nonempty((existing_asked_ids or []) + asked_question_ids(answered_entries))
+    payload["session_updates"] = build_session_update(
+        use_case,
+        depth,
+        full_pending,
+        asked_ids,
+    )
     return payload
 
 
-def build_freeform_start_payload(text: str) -> dict[str, Any]:
-    updates: dict[str, Any] = {}
-    add_update_text(updates, "identity.self_summary", text)
-
-    for sentence in split_sentences(text):
-        if any(marker in sentence for marker in ("在意", "优先", "保护", "看重")):
-            add_update_text(updates, "values.priorities", sentence)
-        if any(marker in sentence for marker in ("先问", "问自己", "先看什么")):
-            add_update_text(updates, "decision_model.default_questions", sentence)
-        elif any(marker in sentence for marker in ("先看", "取舍", "长期", "短期", "代价")):
-            add_update_text(updates, "decision_model.tradeoff_biases", sentence)
-        if any(marker in sentence for marker in ("建议", "安慰", "追问", "灌鸡汤", "帮对方")):
-            add_update_text(updates, "decision_model.advice_style", sentence)
-        if any(marker in sentence for marker in ("边界", "拒绝", "不舒服", "底线")):
-            add_update_text(updates, "interaction_style.boundary_style", sentence)
-
+def build_freeform_start_payload(
+    text: str,
+    *,
+    use_case: str,
+    depth: str,
+    pending_questions: list[dict[str, Any]],
+    custom_goal: str | None = None,
+) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "route": "freeform",
         "mode_after": "freeform",
-        "updates": updates,
+        "updates": {},
+        "meta_updates": {"primary_use_case": use_case},
     }
-    filled_slots = payload_filled_slots(payload)
-    payload["unknowns"] = onboarding_unknowns(filled_slots)
+    add_update_text(payload["updates"], "identity.self_summary", text)
+
+    for sentence in split_sentences(text):
+        if any(marker in sentence for marker in ("在意", "优先", "保护", "看重")):
+            add_update_text(payload["updates"], "values.priorities", sentence)
+        if any(marker in sentence for marker in ("先问", "问自己", "先看什么")):
+            add_update_text(payload["updates"], "decision_model.default_questions", sentence)
+        elif any(marker in sentence for marker in ("先看", "取舍", "长期", "短期", "代价", "风险")):
+            add_update_text(payload["updates"], "decision_model.tradeoff_biases", sentence)
+        if any(marker in sentence for marker in ("建议", "安慰", "追问", "灌鸡汤", "帮对方")):
+            add_update_text(payload["updates"], "decision_model.advice_style", sentence)
+        if any(marker in sentence for marker in ("边界", "拒绝", "不舒服", "底线")):
+            add_update_text(payload["updates"], "interaction_style.boundary_style", sentence)
+        if any(marker in sentence for marker in ("支持", "安抚", "陪", "梳理")):
+            add_update_text(payload["updates"], "interaction_style.support_style", sentence)
+        if any(marker in sentence for marker in ("不同意", "反驳", "指出", "纠正")):
+            add_update_text(payload["updates"], "interaction_style.disagreement_style", sentence)
+
+    enrich_start_payload(payload, use_case, custom_goal=custom_goal)
+    payload["unknowns"] = [question_to_unknown(question) for question in pending_questions]
     payload["next_question"] = payload["unknowns"][0]["question"] if payload["unknowns"] else ""
+    payload["session_updates"] = build_session_update(use_case, depth, pending_questions, [])
     return payload
+
+
+def ask_questions(questions: list[dict[str, Any]], ask: Any) -> list[dict[str, Any]]:
+    answers: list[dict[str, Any]] = []
+    total = len(questions)
+    for index, question in enumerate(questions, start=1):
+        answer = str(ask(format_question_prompt(question, index, total))).strip()
+        answers.append(
+            {
+                "question": question,
+                "answer": answer,
+                "applied": apply_question_answer({"updates": {}, "anchor_examples": []}, question, answer),
+            }
+        )
+    return answers
+
+
+def choose_guided_questions(use_case: str, depth: str, custom_goal: str | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    track_use_case = use_case
+    selected_follow_ups = pick_follow_up_questions(track_use_case, depth)
+
+    if custom_goal:
+        custom_question = custom_follow_up_question(custom_goal)
+        if depth == "quick":
+            pending_questions = [custom_question] + pending_questions_for_depth(track_use_case, "quick", set())
+        else:
+            limit = follow_up_limit(depth)
+            selected_follow_ups = [custom_question] + selected_follow_ups[: max(limit - 1, 0)]
+            if depth == "deep" and not any(question.get("kind") == "anchor_example" for question in selected_follow_ups):
+                anchor_question = next(
+                    (
+                        question
+                        for question in track_definition(track_use_case).get("follow_up_questions", [])
+                        if question.get("kind") == "anchor_example"
+                    ),
+                    None,
+                )
+                if anchor_question is not None:
+                    if len(selected_follow_ups) >= limit and limit > 0:
+                        selected_follow_ups[-1] = anchor_question
+                    else:
+                        selected_follow_ups.append(anchor_question)
+            pending_questions = pending_questions_for_depth(track_use_case, depth, {question["id"] for question in selected_follow_ups})
+    else:
+        pending_questions = pending_questions_for_depth(track_use_case, depth, {question["id"] for question in selected_follow_ups})
+
+    base_questions = [normalize_question(question) for question in track_definition(track_use_case).get("base_questions", [])[:3]]
+    selected_questions = base_questions + [normalize_question(question) for question in selected_follow_ups]
+    pending_questions = [normalize_question(question) for question in pending_questions]
+    return selected_questions, pending_questions
 
 
 def demo_payload() -> dict[str, Any]:
@@ -600,10 +960,12 @@ def build_artifact_preview(profile: dict[str, Any], session: dict[str, Any]) -> 
     summary_label = "暂定自我概括" if self_summary["source"] == "inferred" else "自我概括"
     lines = [
         "当前 preview：",
+        f"- 主用途：{USE_CASE_LABELS.get(str(profile['meta'].get('primary_use_case', 'general')), '通用分身')}",
         f"- {summary_label}：{self_summary['text'] or '还没有。'}",
         f"- 优先保护：{'；'.join(claim_values(profile['values']['priorities'])[:3]) or '待补'}",
         f"- 给建议前先问：{'；'.join(claim_values(profile['decision_model']['default_questions'])[:2]) or '待补'}",
         f"- 设边界方式：{'；'.join(claim_values(profile['interaction_style']['boundary_style'])[:2]) or '待补'}",
+        f"- 剩余细化问题：{len(normalize_question_ids(session.get('pending_questions', [])))}",
         f"- 下一步：{next_question_from_state(profile, session) or '可以继续补充案例或修正。'}",
     ]
     return "\n".join(lines)
@@ -670,10 +1032,18 @@ def next_question_from_state(profile: dict[str, Any], session: dict[str, Any]) -
     return next_question_from_profile(profile)
 
 
+def normalize_question_ids(values: Any) -> list[str]:
+    if values is None:
+        return []
+    if not isinstance(values, list):
+        raise ValueError("pending_questions and asked_questions must be lists")
+    return [str(value).strip() for value in values if str(value).strip()]
+
+
 def apply_turn(root: Path, slug: str, payload: dict[str, Any]) -> dict[str, Any]:
     ensure_exists(root, slug)
-    profile = load_yaml(profile_path(root, slug))
-    session = load_yaml(session_path(root, slug))
+    profile = ensure_profile_defaults(load_yaml(profile_path(root, slug)))
+    session = ensure_session_defaults(load_yaml(session_path(root, slug)), profile)
 
     route = str(payload.get("route", "")).strip()
     if route not in VALID_ROUTES:
@@ -695,9 +1065,20 @@ def apply_turn(root: Path, slug: str, payload: dict[str, Any]) -> dict[str, Any]
     corrections = [normalize_correction(item) for item in payload.get("corrections", [])]
     profile["corrections"].extend(corrections)
 
+    meta_updates = payload.get("meta_updates", {})
+    if meta_updates:
+        primary_use_case = normalize_use_case(meta_updates.get("primary_use_case", profile["meta"].get("primary_use_case", "general")))
+        profile["meta"]["primary_use_case"] = primary_use_case
+
     profile["meta"]["completeness"] = compute_completeness(profile)
     session["mode"] = mode_after
     session["last_route"] = route
+    session_updates = payload.get("session_updates", {})
+    if session_updates:
+        session["interview_track"] = normalize_use_case(session_updates.get("interview_track", session.get("interview_track", "general")))
+        session["interview_depth"] = normalize_interview_depth(session_updates.get("interview_depth", session.get("interview_depth", "quick")))
+        session["pending_questions"] = normalize_question_ids(session_updates.get("pending_questions", session.get("pending_questions", [])))
+        session["asked_questions"] = normalize_question_ids(session_updates.get("asked_questions", session.get("asked_questions", [])))
     session["next_question"] = str(payload.get("next_question", "")).strip() or next_question_from_profile(profile)
     session["updated_at"] = now_iso()
 
@@ -709,6 +1090,7 @@ def apply_turn(root: Path, slug: str, payload: dict[str, Any]) -> dict[str, Any]
         "mode_after": mode_after,
         "completeness": profile["meta"]["completeness"],
         "next_question": session["next_question"],
+        "primary_use_case": profile["meta"]["primary_use_case"],
     }
 
 
@@ -729,6 +1111,8 @@ def start_double(
     language: str = "zh-CN",
     *,
     start_mode: str | None = None,
+    use_case: str | None = None,
+    depth: str | None = None,
     demo: bool = False,
     ask: Any = input,
     writer: Any = print,
@@ -740,7 +1124,12 @@ def start_double(
     if writer:
         writer(START_BANNER)
 
+    selected_use_case = normalize_use_case(use_case) if use_case else prompt_for_use_case(ask)
+    selected_depth = normalize_interview_depth(depth) if depth else prompt_for_depth(ask)
     selected_mode = start_mode
+    resolved_use_case = selected_use_case
+    custom_goal: str | None = None
+
     if demo:
         selected_mode = "demo"
     elif selected_mode is None:
@@ -752,27 +1141,62 @@ def start_double(
         else:
             selected_mode = "guided"
 
+    if selected_use_case == "custom" and not demo:
+        custom_goal = str(ask(CUSTOM_GOAL_PROMPT)).strip()
+        resolved_use_case = infer_use_case_from_custom_goal(custom_goal)
+        if writer:
+            writer(f"已按最接近的用途继续：{USE_CASE_LABELS[resolved_use_case]}")
+            writer("")
+
     if selected_mode == "demo":
         payload = demo_payload()
-        payload["unknowns"] = onboarding_unknowns(payload_filled_slots(payload))
+        payload["meta_updates"] = {"primary_use_case": resolved_use_case if resolved_use_case != "custom" else "general"}
+        pending_questions = pending_questions_for_depth(resolved_use_case if resolved_use_case != "custom" else "general", "quick", set())
+        payload["unknowns"] = [question_to_unknown(question) for question in pending_questions]
         payload["next_question"] = payload["unknowns"][0]["question"] if payload["unknowns"] else ""
+        payload["session_updates"] = build_session_update(
+            resolved_use_case if resolved_use_case != "custom" else "general",
+            "quick",
+            pending_questions,
+            [],
+        )
+        selected_depth = "quick"
     elif selected_mode == "freeform":
         freeform_text = str(ask(f"{FREEFORM_HINT}\n> ")).strip()
         if not freeform_text:
             raise ValueError("freeform start needs at least one non-empty self-description")
-        payload = build_freeform_start_payload(freeform_text)
+        pending_questions = pending_questions_for_depth(resolved_use_case, selected_depth, set())
+        if custom_goal:
+            pending_questions = [custom_follow_up_question(custom_goal)] + pending_questions
+        payload = build_freeform_start_payload(
+            freeform_text,
+            use_case=resolved_use_case,
+            depth=selected_depth,
+            pending_questions=pending_questions,
+            custom_goal=custom_goal,
+        )
     else:
-        answers: dict[str, str] = {}
-        for question in GUIDED_START_QUESTIONS:
-            answer = str(ask(question["prompt"])).strip()
-            answers[question["slot"]] = answer
-        payload = build_guided_start_payload(answers)
+        selected_questions, pending_questions = choose_guided_questions(
+            resolved_use_case,
+            selected_depth,
+            custom_goal=custom_goal,
+        )
+        answers = ask_questions(selected_questions, ask)
+        payload = build_start_payload(
+            route="answer",
+            mode_after="interview",
+            use_case=resolved_use_case,
+            depth=selected_depth,
+            answered_entries=answers,
+            pending_questions=pending_questions,
+            custom_goal=custom_goal,
+        )
         selected_mode = "guided"
 
     apply_turn(root, slug, payload)
     render_result = render_outputs(root, slug)
-    profile = load_yaml(profile_path(root, slug))
-    session = load_yaml(session_path(root, slug))
+    profile = ensure_profile_defaults(load_yaml(profile_path(root, slug)))
+    session = ensure_session_defaults(load_yaml(session_path(root, slug)), profile)
     preview = build_artifact_preview(profile, session)
     correction_applied = False
 
@@ -790,10 +1214,42 @@ def start_double(
         if correction_text:
             correction_result = correct_double(root, slug, text=correction_text, ask=ask, writer=writer)
             render_result = correction_result["render"]
-            profile = load_yaml(profile_path(root, slug))
-            session = load_yaml(session_path(root, slug))
+            profile = ensure_profile_defaults(load_yaml(profile_path(root, slug)))
+            session = ensure_session_defaults(load_yaml(session_path(root, slug)), profile)
             preview = correction_result["preview"]
             correction_applied = True
+
+        if selected_depth == "quick":
+            continue_answer = str(ask(CONTINUE_DETAIL_PROMPT)).strip().lower()
+            if continue_answer in {"y", "yes", "继续", "好", "1"}:
+                profile = ensure_profile_defaults(load_yaml(profile_path(root, slug)))
+                session = ensure_session_defaults(load_yaml(session_path(root, slug)), profile)
+                pending_ids = session.get("pending_questions", [])[:2]
+                follow_up_questions = questions_from_ids(pending_ids)
+                if follow_up_questions:
+                    follow_up_answers = ask_questions(follow_up_questions, ask)
+                    remaining_ids = normalize_question_ids(session.get("pending_questions", []))[len(follow_up_questions):]
+                    follow_up_payload = build_start_payload(
+                        route="answer",
+                        mode_after="interview",
+                        use_case=resolved_use_case,
+                        depth="standard",
+                        answered_entries=follow_up_answers,
+                        pending_questions=questions_from_ids(remaining_ids),
+                        custom_goal=custom_goal,
+                        existing_asked_ids=normalize_question_ids(session.get("asked_questions", [])),
+                    )
+                    apply_turn(root, slug, follow_up_payload)
+                    render_result = render_outputs(root, slug)
+                    profile = ensure_profile_defaults(load_yaml(profile_path(root, slug)))
+                    session = ensure_session_defaults(load_yaml(session_path(root, slug)), profile)
+                    preview = build_artifact_preview(profile, session)
+                    selected_depth = "standard"
+                    if writer:
+                        writer("")
+                        writer("已继续细化。")
+                        writer(preview)
+                        writer("")
 
     if writer and not stdout_is_utf8():
         writer("提示：如果终端中文预览乱码，请先运行 `chcp 65001`，或直接打开生成的 profile.md。")
@@ -806,11 +1262,24 @@ def start_double(
         "slug": slug,
         "display_name": display_name,
         "start_mode": selected_mode,
+        "primary_use_case": resolved_use_case,
+        "interview_depth": selected_depth,
         "correction_applied": correction_applied,
         "preview": preview,
         "next_question": next_question_from_state(profile, session),
         "render": render_result,
     }
+
+
+def prune_pending_questions(pending_ids: list[str], filled_slots: set[str]) -> tuple[list[dict[str, Any]], list[str]]:
+    remaining: list[dict[str, Any]] = []
+    removed_ids: list[str] = []
+    for question in questions_from_ids(pending_ids):
+        if question["slot"] in filled_slots:
+            removed_ids.append(question["id"])
+            continue
+        remaining.append(question)
+    return remaining, removed_ids
 
 
 def correct_double(
@@ -828,15 +1297,27 @@ def correct_double(
     if not correction_text:
         raise ValueError("correction text cannot be empty")
 
-    profile_before = load_yaml(profile_path(root, slug))
+    profile_before = ensure_profile_defaults(load_yaml(profile_path(root, slug)))
+    session_before = ensure_session_defaults(load_yaml(session_path(root, slug)), profile_before)
     payload = build_correction_payload(correction_text)
     filled_slots = payload_filled_slots(payload)
-    payload["unknowns"] = filter_unknowns(profile_before.get("unknowns", []), filled_slots)
+    remaining_pending_questions, removed_ids = prune_pending_questions(
+        normalize_question_ids(session_before.get("pending_questions", [])),
+        filled_slots,
+    )
+    payload["unknowns"] = [question_to_unknown(question) for question in remaining_pending_questions]
     payload["next_question"] = payload["unknowns"][0]["question"] if payload["unknowns"] else ""
+    payload["meta_updates"] = {"primary_use_case": profile_before["meta"].get("primary_use_case", "general")}
+    payload["session_updates"] = build_session_update(
+        str(session_before.get("interview_track", profile_before["meta"].get("primary_use_case", "general"))),
+        str(session_before.get("interview_depth", "quick")),
+        remaining_pending_questions,
+        unique_nonempty(normalize_question_ids(session_before.get("asked_questions", [])) + removed_ids),
+    )
     apply_turn(root, slug, payload)
     render_result = render_outputs(root, slug)
-    profile = load_yaml(profile_path(root, slug))
-    session = load_yaml(session_path(root, slug))
+    profile = ensure_profile_defaults(load_yaml(profile_path(root, slug)))
+    session = ensure_session_defaults(load_yaml(session_path(root, slug)), profile)
     preview = build_artifact_preview(profile, session)
 
     if writer:
@@ -996,9 +1477,12 @@ def render_profile_markdown(profile: dict[str, Any], session: dict[str, Any]) ->
         "## Snapshot",
         f"- slug: `{profile['meta']['slug']}`",
         f"- language: `{profile['meta']['language']}`",
+        f"- primary use case: `{profile['meta'].get('primary_use_case', 'general')}`",
         f"- version: `{profile['meta']['version']}`",
         f"- completeness: `{profile['meta']['completeness']}`",
         f"- current mode: `{session.get('mode', 'interview')}`",
+        f"- interview depth: `{session.get('interview_depth', 'quick')}`",
+        f"- remaining questions: `{len(session.get('pending_questions', []))}`",
         "",
     ]
 
@@ -1071,6 +1555,7 @@ def render_profile_markdown(profile: dict[str, Any], session: dict[str, Any]) ->
 def render_runtime_skill(profile: dict[str, Any]) -> str:
     slug = profile["meta"]["slug"]
     display_name = profile["meta"]["display_name"]
+    primary_use_case = str(profile["meta"].get("primary_use_case", "general"))
     summary = normalize_claim(profile["identity"]["self_summary"], default_source="unknown")
 
     def collect_confirmed(items: list[dict[str, str]]) -> list[str]:
@@ -1133,6 +1618,7 @@ def render_runtime_skill(profile: dict[str, Any]) -> str:
         "",
         "## Runtime Contract",
         "",
+        f"- 主用途：{USE_CASE_LABELS.get(primary_use_case, primary_use_case)}。",
         "- 默认使用简体中文，除非用户明确要求其他语言。",
         "- 只做两件事：像这个人一样交流；按这个人的取舍方式给建议。",
         "- 不编造经历、时间、地点、关系或具体记忆。",
@@ -1167,11 +1653,12 @@ def render_outputs(root: Path, slug: str) -> dict[str, Any]:
     ensure_exists(root, slug)
     snapshot_dir = snapshot_outputs(root, slug)
 
-    profile = load_yaml(profile_path(root, slug))
-    session = load_yaml(session_path(root, slug))
+    profile = ensure_profile_defaults(load_yaml(profile_path(root, slug)))
+    session = ensure_session_defaults(load_yaml(session_path(root, slug)), profile)
     profile["meta"]["version"] = int(profile["meta"].get("version", 1)) + 1
     profile["meta"]["completeness"] = compute_completeness(profile)
     write_yaml(profile_path(root, slug), profile)
+    write_yaml(session_path(root, slug), session)
 
     profile_md_path(root, slug).write_text(render_profile_markdown(profile, session), encoding="utf-8")
     generated_skill_path(root, slug).write_text(render_runtime_skill(profile), encoding="utf-8")
@@ -1187,16 +1674,19 @@ def render_outputs(root: Path, slug: str) -> dict[str, Any]:
 
 def show_state(root: Path, slug: str) -> dict[str, Any]:
     ensure_exists(root, slug)
-    profile = load_yaml(profile_path(root, slug))
-    session = load_yaml(session_path(root, slug))
+    profile = ensure_profile_defaults(load_yaml(profile_path(root, slug)))
+    session = ensure_session_defaults(load_yaml(session_path(root, slug)), profile)
     return {
         "slug": slug,
         "display_name": profile["meta"]["display_name"],
+        "primary_use_case": profile["meta"].get("primary_use_case", "general"),
         "version": profile["meta"]["version"],
         "completeness": profile["meta"]["completeness"],
         "mode": session.get("mode", "interview"),
+        "interview_depth": session.get("interview_depth", "quick"),
         "next_question": next_question_from_state(profile, session),
         "unknown_slots": [item["slot"] for item in profile.get("unknowns", [])],
+        "remaining_questions": normalize_question_ids(session.get("pending_questions", [])),
         "files": {
             "profile": str(profile_path(root, slug)),
             "profile_md": str(profile_md_path(root, slug)),
@@ -1222,6 +1712,8 @@ def build_parser() -> argparse.ArgumentParser:
     start_cmd.add_argument("--display-name")
     start_cmd.add_argument("--language", default="zh-CN")
     start_cmd.add_argument("--mode", choices=["guided", "freeform"])
+    start_cmd.add_argument("--use-case", choices=list(USE_CASES))
+    start_cmd.add_argument("--depth", choices=list(INTERVIEW_DEPTHS))
     start_cmd.add_argument("--demo", action="store_true", help="generate a demo double instead of asking personal questions")
     start_cmd.add_argument("--root")
 
@@ -1294,6 +1786,8 @@ def main() -> None:
             display_name,
             args.language,
             start_mode=args.mode,
+            use_case=args.use_case,
+            depth=args.depth,
             demo=args.demo,
         )
         return

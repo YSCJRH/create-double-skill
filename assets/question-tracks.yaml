@@ -1,0 +1,235 @@
+tracks:
+  general:
+    label: 通用分身
+    base_questions:
+      - id: general_priorities
+        slot: values.priorities
+        prompt: 你做重要决定时，通常先保护什么？
+        why: 这决定分身的整体取舍顺序。
+        kind: list
+        track: general
+        depth: quick
+      - id: general_default_questions
+        slot: decision_model.default_questions
+        prompt: 别人来找你要建议时，你通常会先问什么，或先看什么？
+        why: 这决定分身给建议时先抓什么。
+        kind: claim
+        track: general
+        depth: quick
+      - id: general_boundary_style
+        slot: interaction_style.boundary_style
+        prompt: 你不舒服时会怎么设边界？
+        why: 这会影响分身在压力和冲突下的表现。
+        kind: claim
+        track: general
+        depth: quick
+    follow_up_questions:
+      - id: general_support_style
+        slot: interaction_style.support_style
+        prompt: 别人低落或混乱时，你更像是安抚、追问，还是帮对方看清取舍？
+        why: 这会影响分身给建议时的陪伴方式。
+        kind: claim
+        track: general
+        depth: standard
+      - id: general_voice_tone
+        slot: voice.tone
+        prompt: 别人会怎么形容你的语气和说话节奏？
+        why: 这会影响分身听起来像不像你。
+        kind: list
+        track: general
+        depth: standard
+      - id: general_disagreement_style
+        slot: interaction_style.disagreement_style
+        prompt: 当你不同意别人时，通常会怎么表达？
+        why: 这会影响分身在分歧场景里的真实感。
+        kind: claim
+        track: general
+        depth: deep
+      - id: general_anchor_example
+        slot: anchor_examples
+        prompt: 给我一个你最近做取舍的真实小例子：发生了什么；你怎么选；为什么？
+        why: 高信号案例会让分身更像你怎么判断。
+        kind: anchor_example
+        track: general
+        depth: deep
+
+  work:
+    label: 工作协作版
+    base_questions:
+      - id: work_priorities
+        slot: values.priorities
+        prompt: 在工作里你最先保护什么？是质量、速度、关系、可维护性，还是别的？
+        why: 这决定工作分身的默认取舍。
+        kind: list
+        track: work
+        depth: quick
+      - id: work_default_questions
+        slot: decision_model.default_questions
+        prompt: 接到一个模糊任务时，你通常第一步会先问什么？
+        why: 这决定工作分身的澄清方式。
+        kind: claim
+        track: work
+        depth: quick
+      - id: work_boundary_style
+        slot: interaction_style.boundary_style
+        prompt: 同事或项目节奏让你不舒服时，你会怎么立边界或校正预期？
+        why: 这决定工作分身在压力下怎么说话。
+        kind: claim
+        track: work
+        depth: quick
+    follow_up_questions:
+      - id: work_disagreement_style
+        slot: interaction_style.disagreement_style
+        prompt: 你在 review 或讨论里不同意别人时，通常会怎么说？
+        why: 这决定工作分身在协作冲突里的手感。
+        kind: claim
+        track: work
+        depth: standard
+      - id: work_tradeoff_biases
+        slot: decision_model.tradeoff_biases
+        prompt: 在“快速推进”和“减少后患”之间，你通常更偏哪边？
+        why: 这决定工作分身面对风险时的偏向。
+        kind: claim
+        track: work
+        depth: standard
+      - id: work_voice_tone
+        slot: voice.response_pattern
+        prompt: 在工作沟通里，你更像是先给结论、先问背景，还是先拆问题？
+        why: 这决定工作分身在沟通上的节奏。
+        kind: claim
+        track: work
+        depth: deep
+      - id: work_anchor_example
+        slot: anchor_examples
+        prompt: 给我一个最近的工作取舍案例：发生了什么；你怎么选；为什么？
+        why: 真实工作案例会让工作分身更像你。
+        kind: anchor_example
+        track: work
+        depth: deep
+
+  self-dialogue:
+    label: 自我对话版
+    base_questions:
+      - id: dialogue_priorities
+        slot: values.priorities
+        prompt: 当你卡住、焦虑或内耗时，你最希望先保护什么？
+        why: 这决定自我对话分身首先帮你稳住什么。
+        kind: list
+        track: self-dialogue
+        depth: quick
+      - id: dialogue_default_questions
+        slot: decision_model.default_questions
+        prompt: 当你想把自己拉回清醒时，你最先会问自己什么？
+        why: 这决定自我对话分身的第一反应。
+        kind: claim
+        track: self-dialogue
+        depth: quick
+      - id: dialogue_boundary_style
+        slot: interaction_style.boundary_style
+        prompt: 你会怎样区分“善待自己”和“纵容自己”？
+        why: 这决定自我对话分身的边界感。
+        kind: claim
+        track: self-dialogue
+        depth: quick
+    follow_up_questions:
+      - id: dialogue_support_style
+        slot: interaction_style.support_style
+        prompt: 当你状态不好时，最有帮助的是被安慰、被追问，还是被提醒看清现实？
+        why: 这决定分身如何陪你对话。
+        kind: claim
+        track: self-dialogue
+        depth: standard
+      - id: dialogue_failure_patterns
+        slot: decision_model.failure_patterns
+        prompt: 你最容易在什么情况下说服自己做一个其实会后悔的决定？
+        why: 这决定分身要警惕哪些盲点。
+        kind: claim
+        track: self-dialogue
+        depth: standard
+      - id: dialogue_taboo_phrases
+        slot: voice.taboo_phrases
+        prompt: 什么样的话对你来说看似安慰，实际上会让你更反感或更逃避？
+        why: 这决定分身应该避免哪些无效安慰。
+        kind: list
+        track: self-dialogue
+        depth: deep
+      - id: dialogue_anchor_example
+        slot: anchor_examples
+        prompt: 给我一个你最近从混乱中把自己拉回来的例子：发生了什么；你怎么做；为什么？
+        why: 真实例子会让自我对话分身更有抓手。
+        kind: anchor_example
+        track: self-dialogue
+        depth: deep
+
+  external:
+    label: 对外表达版
+    base_questions:
+      - id: external_priorities
+        slot: values.priorities
+        prompt: 面向他人表达时，你最想保护什么？准确、分寸、亲和、清晰，还是别的？
+        why: 这决定对外分身的表达优先级。
+        kind: list
+        track: external
+        depth: quick
+      - id: external_default_questions
+        slot: decision_model.default_questions
+        prompt: 当你准备公开表达或回复别人时，你会先确认什么？
+        why: 这决定对外分身的判断框架。
+        kind: claim
+        track: external
+        depth: quick
+      - id: external_boundary_style
+        slot: interaction_style.boundary_style
+        prompt: 当别人越界、误解你，或把你推向不想公开的位置时，你会怎么设边界？
+        why: 这决定对外分身的安全边界。
+        kind: claim
+        track: external
+        depth: quick
+    follow_up_questions:
+      - id: external_voice_tone
+        slot: voice.tone
+        prompt: 别人通常会怎么形容你对外说话的感觉？
+        why: 这决定对外分身的第一印象。
+        kind: list
+        track: external
+        depth: standard
+      - id: external_response_pattern
+        slot: voice.response_pattern
+        prompt: 面向他人时，你更像是先铺背景、先给结论，还是先给边界？
+        why: 这决定对外分身的表达结构。
+        kind: claim
+        track: external
+        depth: standard
+      - id: external_taboo_phrases
+        slot: voice.taboo_phrases
+        prompt: 有哪些表述你会刻意避免，因为它们不像你，或会传达错误信号？
+        why: 这决定对外分身应该避免的语言。
+        kind: list
+        track: external
+        depth: deep
+      - id: external_anchor_example
+        slot: anchor_examples
+        prompt: 给我一个你最近面向他人表达分寸感的例子：发生了什么；你怎么说/怎么做；为什么？
+        why: 真实例子会让对外分身更像你。
+        kind: anchor_example
+        track: external
+        depth: deep
+
+  custom:
+    label: 自定义用途
+    base_questions:
+      - id: custom_goal
+        slot: identity.contexts
+        prompt: 这次你最想让这个分身帮你做什么？
+        why: 这决定它最接近哪一种用途。
+        kind: claim
+        track: custom
+        depth: quick
+    follow_up_questions:
+      - id: custom_success_signal
+        slot: identity.contexts
+        prompt: 如果这个分身做得好，你最希望它最明显像你的哪一面？
+        why: 这有助于把自定义用途说得更清楚。
+        kind: claim
+        track: custom
+        depth: standard

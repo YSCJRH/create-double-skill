@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import yaml
@@ -15,6 +14,7 @@ REQUIRED_PATHS = [
     "SKILL.md",
     "agents/openai.yaml",
     "assets/profile-seed.yaml",
+    "assets/question-tracks.yaml",
     "assets/social-preview.svg",
     ".github/ISSUE_TEMPLATE/bug_report.yml",
     ".github/ISSUE_TEMPLATE/config.yml",
@@ -35,6 +35,10 @@ REQUIRED_PATHS = [
     "tests/test_double_builder.py",
     "examples/README.md",
     "examples/start-transcript.md",
+    "examples/start-transcript-general.md",
+    "examples/start-transcript-work.md",
+    "examples/start-transcript-self-dialogue.md",
+    "examples/start-transcript-external.md",
     "examples/generated-artifacts.md",
     "examples/correction-before-after.md",
     "examples/initial-freeform-payload.json",
@@ -94,6 +98,16 @@ def validate(repo_root: Path) -> list[str]:
     ):
         if key not in profile_seed:
             errors.append(f"assets/profile-seed.yaml is missing top-level key '{key}'")
+
+    meta = profile_seed.get("meta", {}) if isinstance(profile_seed, dict) else {}
+    if meta.get("primary_use_case") != "general":
+        errors.append("assets/profile-seed.yaml must default meta.primary_use_case to 'general'")
+
+    question_tracks = load_yaml(repo_root / "assets/question-tracks.yaml") or {}
+    tracks = question_tracks.get("tracks", {}) if isinstance(question_tracks, dict) else {}
+    for track_name in ("general", "work", "self-dialogue", "external", "custom"):
+        if track_name not in tracks:
+            errors.append(f"assets/question-tracks.yaml is missing track '{track_name}'")
 
     return errors
 
