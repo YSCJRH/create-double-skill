@@ -26,4 +26,4 @@ $ python scripts/double_builder.py start --slug my-external-double --display-nam
 > 朋友想让我公开评价一件争议事；我只讲了我能确认的部分；我不想制造超出事实的解读
 ```
 
-这个版本适合“我不是想复制平时聊天的自己，而是想建一个更像我对外表达时怎么拿捏分寸的自己”。
+适合做对外表达版分身。

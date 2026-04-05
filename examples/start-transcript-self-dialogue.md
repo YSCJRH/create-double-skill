@@ -20,4 +20,4 @@ $ python scripts/double_builder.py start --slug my-dialogue-double --display-nam
 > 当我只是想先舒服一点时，最容易说服自己做会后悔的决定
 ```
 
-这个版本更强调你会怎样和自己说话、怎样防止自我欺骗、怎样把自己拉回清醒。
+适合做自我对话版分身。

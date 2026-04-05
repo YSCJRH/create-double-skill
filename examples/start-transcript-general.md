@@ -25,4 +25,4 @@ $ python scripts/double_builder.py start --slug my-general-double --display-name
 - 剩余细化问题：2
 ```
 
-适合第一次想先得到一个通用版 self-model 的人。
+适合先做一个通用版分身。

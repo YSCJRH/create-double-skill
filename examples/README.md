@@ -25,7 +25,7 @@
 - [correction-before-after.md](correction-before-after.md)
   一句 correction 如何回写并改变后续追问
 
-这些示例对应的是“陌生用户第一次来到仓库，如何在几分钟内拿到第一个可信 artifact”。
+这些示例对应的是“陌生用户第一次来到仓库，如何在几分钟内拿到第一版结果文件”。
 
 ## Advanced Payload Examples
 
@@ -47,6 +47,6 @@ python scripts/double_builder.py render --slug demo
 ## Notes
 
 - `start` 是第一次使用者的主入口；`payload` 是进阶入口
-- `quick / standard / deep` 是为了平衡 first success 和深挖细节，不是为了把访谈无限拉长
+- `quick / standard / deep` 是为了平衡第一次跑通和继续细化，不是为了把访谈无限拉长
 - 如果一句话还不能高置信度落槽，就先放进 `unknowns`
 - canonical truth 仍然是 `profile.yaml`，不是这些 JSON 示例本身
