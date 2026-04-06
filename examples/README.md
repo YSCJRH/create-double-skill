@@ -16,6 +16,8 @@
   生成后的 `profile.md` / `SKILL.md` 片段
 - [correction-before-after.md](correction-before-after.md)
   一句 correction 如何回写并改变后续追问
+- [knowledge-base.md](knowledge-base.md)
+  `start` / `correct` 之后，本地会额外积累哪些私有知识页
 
 ## More Examples
 
@@ -51,3 +53,4 @@ python scripts/double_builder.py render --slug demo
 - `quick / standard / deep` 是为了平衡第一次跑通和继续细化，不是为了把访谈无限拉长
 - 如果一句话还不能高置信度落槽，就先放进 `unknowns`
 - `profile.yaml` 是唯一结构化主档案，不是这些 JSON 示例本身
+- `doubles/<slug>/kb/` 是长期积累层；`profile.yaml` 仍是运行时真源

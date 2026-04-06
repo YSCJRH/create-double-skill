@@ -38,6 +38,7 @@ REQUIRED_PATHS = [
     "examples/start-transcript-external.md",
     "examples/generated-artifacts.md",
     "examples/correction-before-after.md",
+    "examples/knowledge-base.md",
     "examples/initial-freeform-payload.json",
     "examples/correction-payload.json",
 ]

@@ -115,6 +115,32 @@ python scripts/double_builder.py correct --slug my-work-double
 - 重新生成 `profile.md` 和 `SKILL.md`
 - 把已经补上的待追问问题从队列里拿掉
 
+## 现在也会自动积累私有知识库
+
+从这版开始，`start` 和 `correct` 除了更新 `profile.yaml`，还会在本地悄悄积累一层高信号知识。
+
+对普通使用者来说，这意味着：
+
+- 你不用额外开任何服务
+- 也不用手动整理完整聊天记录
+- 重要的问答、修正和锚点例子会被压缩成可继续维护的本地知识页
+
+默认会多出两类私有材料：
+
+- `doubles/<slug>/kb/`
+  每个分身自己的长期知识层
+- `.project-kb/`
+  这个仓库本身的私有维护知识库，只保留在本地，不会进入 Git
+
+这里有一个重要边界：
+
+- `profile.yaml` 仍然是唯一运行时真源
+- `kb/` 更像长期积累和编译层，不是第二份并行 runtime 配置
+- 不会默认保存整段聊天流水，更不会自动抓取高隐私数据
+
+如果你只是第一次跑通，可以先忽略这一层。  
+如果你想看它长什么样，再看 [examples/knowledge-base.md](examples/knowledge-base.md)。
+
 ## 先从哪一种分身开始
 
 ### 工作协作版
@@ -190,6 +216,7 @@ python scripts/double_builder.py start --slug my-dialogue-double --display-name 
 如果你想继续用低层命令或自己写 payload，再看：
 
 - [examples/README.md](examples/README.md)
+- [examples/knowledge-base.md](examples/knowledge-base.md)
 - [references/profile-schema.md](references/profile-schema.md)
 - [references/payloads.md](references/payloads.md)
 
@@ -264,6 +291,7 @@ python -m unittest tests/test_double_builder.py -v
 - [prompts/interview.md](prompts/interview.md)
 - [references/profile-schema.md](references/profile-schema.md)
 - [examples/README.md](examples/README.md)
+- [examples/knowledge-base.md](examples/knowledge-base.md)
 
 ## License
 

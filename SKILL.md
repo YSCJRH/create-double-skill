@@ -9,6 +9,15 @@ description: Build and maintain a local, private digital double from interview a
 
 Build a Chinese-first digital double that stays local to this repository. Keep `profile.yaml` as the canonical structured source of truth, use `session.yaml` for transient interview state, and regenerate `profile.md` plus the runtime `SKILL.md` from the profile.
 
+The repo now also has a private knowledge-base layer:
+
+- `doubles/<slug>/kb/`
+  high-signal long-term knowledge for one double
+- `.project-kb/`
+  private maintainer knowledge for this repo
+
+That layer is for accumulation and evidence. It does not replace `profile.yaml` as the runtime source of truth.
+
 ## Quick Start
 
 ### Fast path for a human first run
@@ -40,6 +49,8 @@ Use `correct` right after generation when the user says “我不会这么说”
 ```powershell
 python scripts/double_builder.py correct --slug my-work-double
 ```
+
+`start` and `correct` now also capture private high-signal knowledge events under `doubles/<slug>/kb/`. Keep that automatic capture lightweight and local-only.
 
 ### Low-level path for Codex and custom workflows
 
@@ -139,7 +150,16 @@ python scripts/double_builder.py correct --slug my-work-double
 - Human-readable profile: `doubles/<slug>/profile.md`
 - Generated runtime skill: `doubles/<slug>/SKILL.md`
 - Transient session state: `doubles/<slug>/session.yaml`
+- Private long-term knowledge: `doubles/<slug>/kb/`
 - Snapshot history: `doubles/<slug>/history/<timestamp>__v<version>/`
+
+## Knowledge Base Contract
+
+- Treat `profile.yaml` as the only runtime structured truth.
+- Treat `doubles/<slug>/kb/` as a private accumulation layer for stable evidence, corrections, and longer-lived context.
+- Do not store full life-log transcripts by default.
+- Do not invent knowledge pages that imply certainty beyond what the user actually said.
+- If a knowledge event is still unstable or conflicting, leave it in the KB or `unknowns` instead of forcing it into `profile.yaml`.
 
 ## When To Read Extra Files
 
