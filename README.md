@@ -262,9 +262,8 @@ python -m unittest tests/test_double_builder.py -v
 
 - [SKILL.md](SKILL.md)
 - [prompts/interview.md](prompts/interview.md)
-- [docs/github-publication-kit.md](docs/github-publication-kit.md)
-- [docs/benchmark-review.md](docs/benchmark-review.md)
-- [docs/readme-copy-checklist.md](docs/readme-copy-checklist.md)
+- [references/profile-schema.md](references/profile-schema.md)
+- [examples/README.md](examples/README.md)
 
 ## License
 

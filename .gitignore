@@ -7,3 +7,4 @@ Thumbs.db
 
 doubles/*
 !doubles/.gitkeep
+.private-docs/
