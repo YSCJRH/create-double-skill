@@ -6,3 +6,9 @@ contact_links:
   - name: Browse the examples
     url: https://github.com/YSCJRH/create-double-skill/blob/main/examples/README.md
     about: 如果你想先看真实输出、修正前后对比，先看 examples 目录。
+  - name: Get support
+    url: https://github.com/YSCJRH/create-double-skill/blob/main/SUPPORT.md
+    about: 如果你不确定该开哪种 issue，先看 SUPPORT 里的分流说明。
+  - name: Security policy
+    url: https://github.com/YSCJRH/create-double-skill/blob/main/SECURITY.md
+    about: 安全问题不要走公开 issue，先看 SECURITY 里的私下上报方式。

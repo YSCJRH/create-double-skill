@@ -303,6 +303,13 @@ python -m unittest tests/test_double_builder.py -v
 - [examples/README.md](examples/README.md)
 - [examples/knowledge-base.md](examples/knowledge-base.md)
 
+## Community
+
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- [SECURITY.md](SECURITY.md)
+- [SUPPORT.md](SUPPORT.md)
+
 ## License
 
 [MIT](LICENSE)
