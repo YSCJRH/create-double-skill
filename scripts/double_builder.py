@@ -1124,15 +1124,19 @@ def start_double(
     if writer:
         writer(START_BANNER)
 
-    selected_use_case = normalize_use_case(use_case) if use_case else prompt_for_use_case(ask)
-    selected_depth = normalize_interview_depth(depth) if depth else prompt_for_depth(ask)
-    selected_mode = start_mode
+    explicit_start_config = demo or start_mode is not None or use_case is not None or depth is not None
+    if explicit_start_config:
+        selected_use_case = normalize_use_case(use_case or "general")
+        selected_depth = normalize_interview_depth(depth or "quick")
+        selected_mode = "demo" if demo else (start_mode or "guided")
+    else:
+        selected_use_case = prompt_for_use_case(ask)
+        selected_depth = prompt_for_depth(ask)
+        selected_mode = None
     resolved_use_case = selected_use_case
     custom_goal: str | None = None
 
-    if demo:
-        selected_mode = "demo"
-    elif selected_mode is None:
+    if not explicit_start_config and selected_mode is None:
         choice = str(ask(START_CHOICE_PROMPT)).strip()
         if choice.lower() == "demo":
             selected_mode = "demo"
@@ -1141,7 +1145,7 @@ def start_double(
         else:
             selected_mode = "guided"
 
-    if selected_use_case == "custom" and not demo:
+    if selected_use_case == "custom" and selected_mode != "demo":
         custom_goal = str(ask(CUSTOM_GOAL_PROMPT)).strip()
         resolved_use_case = infer_use_case_from_custom_goal(custom_goal)
         if writer:

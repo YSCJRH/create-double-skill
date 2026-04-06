@@ -23,6 +23,7 @@ REQUIRED_PATHS = [
     "docs/github-publication-kit.md",
     "docs/launch-copy.md",
     "docs/pre-release-checklist.md",
+    "docs/readme-copy-checklist.md",
     "docs/release-v0.1.0.md",
     "prompts/router.md",
     "prompts/interview.md",

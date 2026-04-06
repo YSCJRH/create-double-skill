@@ -1,4 +1,6 @@
 import importlib.util
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,6 +26,19 @@ class DoubleBuilderTests(unittest.TestCase):
         profile = double_builder.load_yaml(double_builder.profile_path(self.root, slug))
         session = double_builder.load_yaml(double_builder.session_path(self.root, slug))
         return profile, session
+
+    def _run_cli(self, *args: str, input_text: str = "") -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(MODULE_PATH), *args],
+            cwd=str(MODULE_PATH.parents[1]),
+            input=input_text.encode("utf-8"),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+
+    def _decode(self, data: bytes) -> str:
+        return data.decode("utf-8", errors="replace")
 
     def test_route_recognizes_control_and_correction(self):
         routed = double_builder.classify_turn("继续提问", current_mode="freeform")
@@ -242,6 +257,68 @@ class DoubleBuilderTests(unittest.TestCase):
         _profile, session = self._reader("my-double")
         self.assertEqual(session["pending_questions"], ["dialogue_anchor_example"])
         self.assertIn("dialogue_taboo_phrases", session["asked_questions"])
+
+    def test_cli_start_with_explicit_use_case_skips_mode_prompt(self):
+        process = self._run_cli(
+            "start",
+            "--root",
+            str(self.root),
+            "--slug",
+            "cli-work-double",
+            "--display-name",
+            "工作分身",
+            "--use-case",
+            "work",
+            input_text="\n".join(
+                [
+                    "maintainability, clear scope, no surprise spread",
+                    "I ask for the goal and the thing that must not fail",
+                    "I explain the risk, then state the smallest scope I can accept",
+                    "",
+                    "",
+                ]
+            )
+            + "\n",
+        )
+
+        stdout = self._decode(process.stdout)
+        stderr = self._decode(process.stderr)
+
+        self.assertEqual(process.returncode, 0, msg=stderr)
+        self.assertNotIn(double_builder.START_CHOICE_PROMPT, stdout)
+        self.assertIn("1/3", stdout)
+        self.assertIn("已生成：", stdout)
+
+    def test_cli_start_without_explicit_use_case_keeps_mode_prompt(self):
+        process = self._run_cli(
+            "start",
+            "--root",
+            str(self.root),
+            "--slug",
+            "cli-guided-double",
+            "--display-name",
+            "工作分身",
+            input_text="\n".join(
+                [
+                    "work",
+                    "quick",
+                    "",
+                    "maintainability, clear scope, no surprise spread",
+                    "I ask for the goal and the thing that must not fail",
+                    "I explain the risk, then state the smallest scope I can accept",
+                    "",
+                    "",
+                ]
+            )
+            + "\n",
+        )
+
+        stdout = self._decode(process.stdout)
+        stderr = self._decode(process.stderr)
+
+        self.assertEqual(process.returncode, 0, msg=stderr)
+        self.assertIn(double_builder.START_CHOICE_PROMPT, stdout)
+        self.assertIn("先选你要哪一种分身", stdout)
 
     def test_doctor_reports_repo_health(self):
         report = double_builder.doctor_report(MODULE_PATH.parents[1])
