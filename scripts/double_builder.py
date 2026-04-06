@@ -110,6 +110,49 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+@lru_cache(maxsize=1)
+def load_knowledge_base_module() -> Any | None:
+    module_path = repo_root() / "scripts" / "knowledge_base.py"
+    if not module_path.exists():
+        return None
+
+    spec = importlib.util.spec_from_file_location("knowledge_base", module_path)
+    if spec is None or spec.loader is None:
+        return None
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def sync_double_kb_event(
+    root: Path,
+    slug: str,
+    event_kind: str,
+    *,
+    summary: str,
+    details: dict[str, Any] | None = None,
+    candidate_paths: list[str] | None = None,
+    promoted_paths: list[str] | None = None,
+) -> dict[str, Any] | None:
+    module = load_knowledge_base_module()
+    if module is None:
+        return None
+
+    try:
+        return module.record_double_event(
+            root,
+            slug,
+            event_kind,
+            summary=summary,
+            details=details or {},
+            candidate_paths=candidate_paths or [],
+            promoted_paths=promoted_paths or [],
+        )
+    except Exception:
+        return None
+
+
 def question_tracks_path() -> Path:
     return repo_root() / "assets" / "question-tracks.yaml"
 
@@ -1135,6 +1178,7 @@ def start_double(
         selected_mode = None
     resolved_use_case = selected_use_case
     custom_goal: str | None = None
+    kb_candidate_paths: set[str] = set()
 
     if not explicit_start_config and selected_mode is None:
         choice = str(ask(START_CHOICE_PROMPT)).strip()
@@ -1165,6 +1209,7 @@ def start_double(
             [],
         )
         selected_depth = "quick"
+        kb_candidate_paths.update(payload_filled_slots(payload))
     elif selected_mode == "freeform":
         freeform_text = str(ask(f"{FREEFORM_HINT}\n> ")).strip()
         if not freeform_text:
@@ -1179,6 +1224,7 @@ def start_double(
             pending_questions=pending_questions,
             custom_goal=custom_goal,
         )
+        kb_candidate_paths.update(payload_filled_slots(payload))
     else:
         selected_questions, pending_questions = choose_guided_questions(
             resolved_use_case,
@@ -1196,6 +1242,7 @@ def start_double(
             custom_goal=custom_goal,
         )
         selected_mode = "guided"
+        kb_candidate_paths.update(payload_filled_slots(payload))
 
     apply_turn(root, slug, payload)
     render_result = render_outputs(root, slug)
@@ -1249,6 +1296,7 @@ def start_double(
                     session = ensure_session_defaults(load_yaml(session_path(root, slug)), profile)
                     preview = build_artifact_preview(profile, session)
                     selected_depth = "standard"
+                    kb_candidate_paths.update(payload_filled_slots(follow_up_payload))
                     if writer:
                         writer("")
                         writer("已继续细化。")
@@ -1261,6 +1309,24 @@ def start_double(
 
     if writer:
         writer(f"继续补充：python scripts/double_builder.py correct --slug {slug}")
+
+    if not demo:
+        sync_double_kb_event(
+            root,
+            slug,
+            "start",
+            summary=preview,
+            details={
+                "correction_applied": correction_applied,
+                "custom_goal": custom_goal,
+                "interview_depth": selected_depth,
+                "next_question": next_question_from_state(profile, session),
+                "primary_use_case": resolved_use_case,
+                "start_mode": selected_mode,
+            },
+            candidate_paths=sorted(kb_candidate_paths),
+            promoted_paths=sorted(kb_candidate_paths),
+        )
 
     return {
         "slug": slug,
@@ -1329,6 +1395,20 @@ def correct_double(
         writer("已应用 correction。")
         writer(preview)
         writer("")
+
+    sync_double_kb_event(
+        root,
+        slug,
+        "correction",
+        summary=correction_text,
+        details={
+            "next_question": next_question_from_state(profile, session),
+            "pruned_pending_question_ids": removed_ids,
+            "remaining_pending_question_ids": normalize_question_ids(session.get("pending_questions", [])),
+        },
+        candidate_paths=sorted(filled_slots),
+        promoted_paths=sorted(filled_slots),
+    )
 
     return {
         "slug": slug,
