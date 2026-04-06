@@ -16,8 +16,13 @@
   生成后的 `profile.md` / `SKILL.md` 片段
 - [correction-before-after.md](correction-before-after.md)
   一句 correction 如何回写并改变后续追问
-- [knowledge-base.md](knowledge-base.md)
-  `start` / `correct` 之后，本地会额外积累哪些私有知识页
+
+如果第一次只是想确认环境，先跑：
+
+```powershell
+python scripts/double_builder.py doctor
+python scripts/double_builder.py start --demo --use-case work
+```
 
 ## More Examples
 
@@ -29,6 +34,8 @@
   自我对话版
 - [start-transcript-external.md](start-transcript-external.md)
   对外表达版
+- [knowledge-base.md](knowledge-base.md)
+  `start` / `correct` 之后，本地会额外积累哪些私有知识页
 
 ## Advanced Payload Examples
 

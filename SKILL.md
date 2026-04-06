@@ -7,7 +7,7 @@ description: Build and maintain a local, private digital double from interview a
 
 ## Overview
 
-Build a Chinese-first digital double that stays local to this repository. Keep `profile.yaml` as the canonical structured source of truth, use `session.yaml` for transient interview state, and regenerate `profile.md` plus the runtime `SKILL.md` from the profile.
+Build a Chinese-first digital double that stays local to this repository. Keep `profile.yaml` as the main runtime record, use `session.yaml` for transient interview state, and regenerate `profile.md` plus the runtime `SKILL.md` from the profile.
 
 The repo now also has a private knowledge-base layer:
 
@@ -26,6 +26,13 @@ If the user only wants the first visible artifact, prefer:
 
 ```powershell
 python scripts/double_builder.py start --slug my-work-double --display-name "工作分身" --use-case work
+```
+
+If the user wants to check the environment first, use:
+
+```powershell
+python scripts/double_builder.py doctor
+python scripts/double_builder.py start --demo --use-case work
 ```
 
 `start` now has two front-door decisions:

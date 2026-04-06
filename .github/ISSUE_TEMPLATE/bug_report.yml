@@ -13,7 +13,7 @@ body:
     attributes:
       label: 问题概述
       description: 用 1-3 句话说明你遇到了什么问题。
-      placeholder: 例如：`render` 成功返回，但 `doubles/<slug>/SKILL.md` 没有生成。
+      placeholder: 例如：`start --use-case work` 运行完了，但 `doubles/<slug>/profile.md` 没有生成。
     validations:
       required: true
   - type: textarea
@@ -22,9 +22,9 @@ body:
       label: 复现步骤
       description: 按顺序写出最短复现路径。
       placeholder: |
-        1. 运行 `python scripts/double_builder.py init --slug demo --display-name "演示分身"`
-        2. 运行 `python scripts/double_builder.py apply-turn --slug demo --payload-file ...`
-        3. 运行 `python scripts/double_builder.py render --slug demo`
+        1. 运行 `python scripts/double_builder.py doctor`
+        2. 运行 `python scripts/double_builder.py start --slug demo --display-name "演示分身" --use-case work`
+        3. 如果有修正，再运行 `python scripts/double_builder.py correct --slug demo`
         4. 观察到 ...
     validations:
       required: true
@@ -58,6 +58,6 @@ body:
     id: extras
     attributes:
       label: 补充信息
-      description: 可以补充截图、最小 payload、或你已经尝试过的排查方式。
+      description: 可以补充截图、最小命令链、`doctor` 输出、或你已经尝试过的排查方式。
     validations:
       required: false

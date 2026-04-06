@@ -8,6 +8,15 @@ Build a private digital double from guided answers.
 
 ## 三分钟跑通第一次
 
+如果你还没把仓库拿到本地：
+
+```powershell
+git clone https://github.com/YSCJRH/create-double-skill.git
+cd create-double-skill
+```
+
+如果你在 Windows 上用 HTTPS `git clone` 报 `schannel` 或证书相关错误，先直接用 GitHub 页面的 `Download ZIP`，或者改用 SSH。
+
 先安装依赖：
 
 ```powershell
@@ -30,6 +39,12 @@ python scripts/double_builder.py start --slug my-work-double --display-name "工
 
 ```powershell
 python scripts/double_builder.py doctor
+```
+
+如果你想先确认环境和输出长什么样，再开始自己的分身：
+
+```powershell
+python scripts/double_builder.py start --demo --use-case work
 ```
 
 如果你在 Windows PowerShell 里看到中文预览乱码，先运行 `chcp 65001`，或者直接打开生成的 `profile.md`。
@@ -114,32 +129,6 @@ python scripts/double_builder.py correct --slug my-work-double
 - 回写到 `profile.yaml`
 - 重新生成 `profile.md` 和 `SKILL.md`
 - 把已经补上的待追问问题从队列里拿掉
-
-## 现在也会自动积累私有知识库
-
-从这版开始，`start` 和 `correct` 除了更新 `profile.yaml`，还会在本地悄悄积累一层高信号知识。
-
-对普通使用者来说，这意味着：
-
-- 你不用额外开任何服务
-- 也不用手动整理完整聊天记录
-- 重要的问答、修正和锚点例子会被压缩成可继续维护的本地知识页
-
-默认会多出两类私有材料：
-
-- `doubles/<slug>/kb/`
-  每个分身自己的长期知识层
-- `.project-kb/`
-  这个仓库本身的私有维护知识库，只保留在本地，不会进入 Git
-
-这里有一个重要边界：
-
-- `profile.yaml` 仍然是唯一运行时真源
-- `kb/` 更像长期积累和编译层，不是第二份并行 runtime 配置
-- 不会默认保存整段聊天流水，更不会自动抓取高隐私数据
-
-如果你只是第一次跑通，可以先忽略这一层。  
-如果你想看它长什么样，再看 [examples/knowledge-base.md](examples/knowledge-base.md)。
 
 ## 先从哪一种分身开始
 
@@ -260,6 +249,27 @@ python scripts/double_builder.py correct --slug my-double
 `profile.yaml` 是结构化主档案。  
 `profile.md` 是给人看的摘要。  
 `SKILL.md` 是给运行时 double 用的约束和材料。
+
+## 现在也会自动积累私有知识库
+
+从这版开始，`start` 和 `correct` 除了更新 `profile.yaml`，还会在本地顺手积累一层高信号知识。
+
+你可以先不管它，第一次跑通不需要理解这层。
+
+默认会多出两类私有材料：
+
+- `doubles/<slug>/kb/`
+  每个分身自己的长期知识层
+- `.project-kb/`
+  这个仓库本身的私有维护知识库，只保留在本地，不会进入 Git
+
+重要边界：
+
+- `profile.yaml` 仍然是唯一运行时真源
+- `kb/` 是长期积累和编译层，不是第二份并行配置
+- 不会默认保存整段聊天流水，也不会自动抓取高隐私数据
+
+如果你想看目录结构和常用命令，再看 [examples/knowledge-base.md](examples/knowledge-base.md)。
 
 ## 给 Codex 和其他 AI 编程助手
 
