@@ -4,7 +4,7 @@
 
 Build a private digital double from guided answers.
 
-把你做判断、设边界、给建议的方式，整理成一份能继续修改的本地档案。
+为你建立自己的“分身”！
 
 ## 三分钟跑通第一次
 
